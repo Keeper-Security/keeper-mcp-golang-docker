@@ -5,6 +5,13 @@ All notable changes to the KSM MCP project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] - 2025-05-24
+
+### Fixed
+- All CLI output now goes to stderr to prevent JSON parse errors
+- Cobra framework configured to use stderr for all commands
+- Fixed init command output breaking MCP protocol
+
 ## [1.0.2] - 2025-05-24
 
 ### Fixed

@@ -8,7 +8,7 @@ import (
 
 // Version is the current version of ksm-mcp
 // This must match the git tag when creating releases
-const Version = "v1.0.2"
+const Version = "v1.0.3"
 
 func main() {
 	// Set version for commands
