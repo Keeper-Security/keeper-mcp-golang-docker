@@ -27,9 +27,11 @@ Choose your preferred setup method:
       "args": [
         "run", "-i", "--rm",
         "-e", "KSM_CONFIG_BASE64=YOUR_BASE64_CONFIG_STRING_HERE",
+        "-e", "KSM_MCP_BATCH_MODE=true",
+        "-e", "KSM_MCP_LOG_LEVEL=error",
         "-v", "ksm-mcp-data:/home/ksm/.keeper/ksm-mcp",
         "keepersecurityinc/ksm-mcp-poc:latest",
-        "serve"
+        "serve", "--stdio"
       ]
     }
   }
@@ -534,6 +536,19 @@ make build
 ## 🐛 Troubleshooting
 
 ### Common Issues
+
+**"Unexpected token" error in Claude Desktop**
+```
+MCP ksm: Unexpected token 'A', "Auto-init"... is not valid JSON
+```
+
+This happens when the server outputs non-JSON initialization messages. Fix by adding these environment variables:
+```json
+"-e", "KSM_MCP_BATCH_MODE=true",
+"-e", "KSM_MCP_LOG_LEVEL=error",
+```
+
+And ensure you have `"--stdio"` in the serve command.
 
 **"Profile not found" error**
 ```bash
