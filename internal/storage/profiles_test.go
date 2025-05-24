@@ -375,7 +375,7 @@ func TestPersistence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create profile: %v", err)
 	}
-	
+
 	store1.Close()
 
 	// Create second store with same password (should load existing data)

@@ -96,7 +96,7 @@ func (ps *ProfileStore) CreateProfile(name string, config map[string]string) err
 	for k, v := range config {
 		configCopy[k] = v
 	}
-	
+
 	profile := &types.Profile{
 		Name:      name,
 		Config:    configCopy,
