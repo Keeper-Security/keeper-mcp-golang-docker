@@ -50,7 +50,7 @@ Examples:
 
 func init() {
 	rootCmd.AddCommand(serveCmd)
-	
+
 	// Ensure serve command outputs to stderr (important for MCP protocol)
 	serveCmd.SetOut(os.Stderr)
 	serveCmd.SetErr(os.Stderr)

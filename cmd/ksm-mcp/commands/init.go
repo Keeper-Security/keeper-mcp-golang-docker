@@ -46,7 +46,7 @@ Examples:
 
 func init() {
 	rootCmd.AddCommand(initCmd)
-	
+
 	// Ensure init command outputs to stderr (important for Docker entrypoint)
 	initCmd.SetOut(os.Stderr)
 	initCmd.SetErr(os.Stderr)
