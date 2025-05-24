@@ -4,7 +4,7 @@
 BINARY_NAME=ksm-mcp
 VERSION?=$(shell git describe --tags --always --dirty)
 BUILD_DIR=bin
-DOCKER_IMAGE=ksm-mcp
+DOCKER_IMAGE=keepersecurityinc/ksm-mcp-poc
 DOCKER_TAG?=latest
 
 # Go variables
@@ -119,6 +119,25 @@ docker-run:
 		-v ~/.keeper/ksm-mcp:/home/ksm/.keeper/ksm-mcp \
 		$(DOCKER_IMAGE):$(DOCKER_TAG)
 
+## Build and push Docker image to Docker Hub
+docker-push: docker-build
+	@echo "Pushing Docker image to Docker Hub..."
+	docker push $(DOCKER_IMAGE):$(DOCKER_TAG)
+	@if [ "$(DOCKER_TAG)" != "latest" ]; then \
+		docker tag $(DOCKER_IMAGE):$(DOCKER_TAG) $(DOCKER_IMAGE):latest; \
+		docker push $(DOCKER_IMAGE):latest; \
+	fi
+
+## Build multi-platform Docker image and push to Docker Hub
+docker-push-multi:
+	@echo "Building and pushing multi-platform Docker image..."
+	docker buildx create --use --name ksm-mcp-builder || true
+	docker buildx build --platform linux/amd64,linux/arm64 \
+		-t $(DOCKER_IMAGE):$(DOCKER_TAG) \
+		-t $(DOCKER_IMAGE):latest \
+		--push .
+	docker buildx rm ksm-mcp-builder
+
 ## Install binary to local system
 install: build
 	@echo "Installing $(BINARY_NAME) to /usr/local/bin..."
@@ -161,6 +180,8 @@ help:
 	@echo "  deps-verify    - Verify dependencies"
 	@echo "  docker-build   - Build Docker image"
 	@echo "  docker-run     - Run Docker container"
+	@echo "  docker-push    - Build and push Docker image to Docker Hub"
+	@echo "  docker-push-multi - Build and push multi-platform image"
 	@echo "  install        - Install binary to /usr/local/bin"
 	@echo "  uninstall      - Remove binary from /usr/local/bin"
 	@echo "  security       - Run security scan"

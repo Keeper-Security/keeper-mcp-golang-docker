@@ -37,6 +37,12 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&verbose, "verbose", false, "verbose output")
 }
 
+// SetVersion sets the version for the CLI
+func SetVersion(v string) {
+	version = v
+	rootCmd.Version = v
+}
+
 // verboseLog prints a message only if verbose mode is enabled
 func verboseLog(format string, args ...interface{}) {
 	if verbose {
