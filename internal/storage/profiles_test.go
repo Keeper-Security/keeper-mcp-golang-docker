@@ -362,17 +362,27 @@ func TestPersistence(t *testing.T) {
 		"appKey":   "test-app-key",
 	}
 
-	// Create first store and add profile
-	store1 := NewProfileStore(tempDir)
+	// Use a consistent password for both stores
+	testPassword := "test-password-for-persistence"
 
-	err := store1.CreateProfile("persistent-profile", config)
+	// Create first store and add profile
+	store1, err := NewProfileStoreWithPassword(tempDir, testPassword)
+	if err != nil {
+		t.Fatalf("Failed to create profile store: %v", err)
+	}
+
+	err = store1.CreateProfile("persistent-profile", config)
 	if err != nil {
 		t.Fatalf("Failed to create profile: %v", err)
 	}
+	
 	store1.Close()
 
-	// Create second store (should load existing data)
-	store2 := NewProfileStore(tempDir)
+	// Create second store with same password (should load existing data)
+	store2, err := NewProfileStoreWithPassword(tempDir, testPassword)
+	if err != nil {
+		t.Fatalf("Failed to create second profile store: %v", err)
+	}
 	defer store2.Close()
 
 	// Verify profile was persisted

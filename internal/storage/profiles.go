@@ -91,10 +91,15 @@ func (ps *ProfileStore) CreateProfile(name string, config map[string]string) err
 		return fmt.Errorf("invalid KSM configuration: %w", err)
 	}
 
-	// Create new profile
+	// Create new profile with a copy of the config
+	configCopy := make(map[string]string)
+	for k, v := range config {
+		configCopy[k] = v
+	}
+	
 	profile := &types.Profile{
 		Name:      name,
-		Config:    config,
+		Config:    configCopy,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}

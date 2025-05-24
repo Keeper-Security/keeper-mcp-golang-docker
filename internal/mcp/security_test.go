@@ -149,7 +149,7 @@ func TestServer_SecurityValidation(t *testing.T) {
 			}
 
 			// Process message
-			err = server.processMessage(reqData, writer)
+			_ = server.processMessage(reqData, writer)
 			writer.Flush()
 
 			// Check response
