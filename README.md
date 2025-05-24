@@ -2,7 +2,7 @@
 
 [![Go Version](https://img.shields.io/badge/go-1.21+-blue.svg)](https://golang.org)
 [![MCP Protocol](https://img.shields.io/badge/MCP-1.0-green.svg)](https://modelcontextprotocol.io)
-[![License](https://img.shields.io/badge/license-Apache%202.0-red.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Docker](https://img.shields.io/badge/docker-ready-blue.svg)](https://hub.docker.com/r/keeper/ksm-mcp)
 
 A secure Model Context Protocol (MCP) server for Keeper Secrets Manager (KSM) that enables AI agents to safely interact with secrets without direct credential exposure.
