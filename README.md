@@ -1,44 +1,20 @@
 # KSM MCP - Keeper Secrets Manager Model Context Protocol Server
 
-[![Go Version](https://img.shields.io/badge/go-1.21+-blue.svg)](https://golang.org)
+[![Go Version](https://img.shields.io/badge/go-1.23+-blue.svg)](https://golang.org)
 [![MCP Protocol](https://img.shields.io/badge/MCP-1.0-green.svg)](https://modelcontextprotocol.io)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Docker](https://img.shields.io/badge/docker-ready-blue.svg)](https://hub.docker.com/r/keepersecurityinc/ksm-mcp-poc)
 
 A secure Model Context Protocol (MCP) server for Keeper Secrets Manager (KSM) that enables AI agents to safely interact with secrets without direct credential exposure.
 
-## 📋 Quick Start Guide
+## 🚀 Quick Start (2 Minutes)
 
-**One-liner for the impatient** (after getting your base64 config):
-```bash
-docker run -it --rm -e KSM_CONFIG_BASE64="YOUR_CONFIG" -v ~/.keeper/ksm-mcp:/home/ksm/.keeper/ksm-mcp keepersecurityinc/ksm-mcp-poc:latest serve
-```
+Choose your preferred setup method:
 
-KSM MCP lets AI assistants manage your secrets securely:
-- **What**: Bridge between AI (like Claude) and Keeper Secrets Manager
-- **Why**: AI never sees your KSM credentials or master password
-- **How**: Get base64 config → Run container → AI can now manage secrets
-- **Security**: All sensitive operations require human confirmation
+### Option 1: Claude Desktop + Docker (Easiest)
 
-> **Note**: This guide uses base64-encoded configuration for the fastest setup. For production deployments, see [Advanced Configuration](#advanced-configuration).
-
-## 🎯 Overview
-
-KSM MCP acts as a secure intermediary between AI agents and Keeper Secrets Manager, implementing the Model Context Protocol to provide controlled access to secrets management capabilities. It ensures that sensitive credentials are never exposed to AI models while maintaining full auditability and security controls.
-
-### Key Benefits
-
-- **Zero Trust Architecture**: AI agents never see KSM credentials
-- **Human-in-the-Loop**: Confirmation prompts for sensitive operations
-- **Enterprise Ready**: Comprehensive audit logging and compliance features
-- **Docker Native**: Easy deployment with container support
-- **Multi-Platform**: Works on Linux, macOS, and Windows
-
-## 🚀 Quick Start (Under 2 Minutes)
-
-### Option 1: Claude Desktop + Docker (Single File!)
-
-1. **Edit your Claude Desktop config** `claude_desktop_config.json`:
+1. **Get your base64 config** from [Keeper Secrets Manager Portal](https://keepersecurity.com/secrets-manager/)
+2. **Edit Claude Desktop config** `claude_desktop_config.json`:
    - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
    - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
    - Linux: `~/.config/Claude/claude_desktop_config.json`
@@ -60,13 +36,68 @@ KSM MCP acts as a secure intermediary between AI agents and Keeper Secrets Manag
 }
 ```
 
-2. **Restart Claude Desktop** - That's it! No other files needed.
+3. **Restart Claude Desktop** - Done! ✨
 
-> **Note**: Replace `YOUR_BASE64_CONFIG_STRING_HERE` with your actual base64 config from the KSM portal.
+### Option 2: Binary Download (No Docker Required)
 
-### Option 2: Docker Compose (If you prefer compose)
+1. **Download the binary** for your platform:
+   ```bash
+   # macOS/Linux automated download
+   curl -L https://github.com/Keeper-Security/ksm-mcp/releases/latest/download/ksm-mcp-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m | sed 's/x86_64/amd64/') -o ksm-mcp
+   chmod +x ksm-mcp
+   ```
+   
+   Or download manually:
+   - [macOS (Intel)](https://github.com/Keeper-Security/ksm-mcp/releases/latest/download/ksm-mcp-darwin-amd64)
+   - [macOS (Apple Silicon)](https://github.com/Keeper-Security/ksm-mcp/releases/latest/download/ksm-mcp-darwin-arm64)
+   - [Linux (x64)](https://github.com/Keeper-Security/ksm-mcp/releases/latest/download/ksm-mcp-linux-amd64)
+   - [Windows (x64)](https://github.com/Keeper-Security/ksm-mcp/releases/latest/download/ksm-mcp-windows-amd64.exe)
 
-1. **Create** `docker-compose.yml` (minimal, just 8 lines!):
+2. **Initialize with your base64 config**:
+   ```bash
+   ./ksm-mcp init --config "YOUR_BASE64_CONFIG_STRING"
+   ```
+
+3. **Add to Claude Desktop config**:
+   ```json
+   {
+     "mcpServers": {
+       "ksm": {
+         "command": "/path/to/ksm-mcp",
+         "args": ["serve"]
+       }
+     }
+   }
+   ```
+
+## 📝 Getting Your Base64 Config
+
+1. Log into [Keeper Secrets Manager Portal](https://keepersecurity.com/secrets-manager/)
+2. Create or select an application
+3. Generate a One-Time Token
+4. Copy the **base64-encoded configuration string** (starts with `ewog...`)
+
+## 🎯 Overview
+
+KSM MCP lets AI assistants manage your secrets securely:
+- **What**: Bridge between AI (like Claude) and Keeper Secrets Manager
+- **Why**: AI never sees your KSM credentials or master password
+- **How**: Get base64 config → Run server → AI can now manage secrets
+- **Security**: All sensitive operations require human confirmation
+
+### Key Benefits
+
+- **Zero Trust Architecture**: AI agents never see KSM credentials
+- **Human-in-the-Loop**: Confirmation prompts for sensitive operations
+- **Enterprise Ready**: Comprehensive audit logging and compliance features
+- **Docker Native**: Easy deployment with container support
+- **Multi-Platform**: Works on Linux, macOS, and Windows
+
+## 🔧 Additional Setup Options
+
+### Docker Compose
+
+Create `docker-compose.yml`:
 ```yaml
 version: '3'
 services:
@@ -80,54 +111,26 @@ services:
     tty: true
 ```
 
-2. **Run**: `docker-compose up`
+Run: `docker-compose up`
 
-### Option 3: Docker (Manual Command)
+### Direct Docker Run
 
 ```bash
-# Single command with auto-initialization
 docker run -it --rm \
   -e KSM_CONFIG_BASE64="YOUR_BASE64_CONFIG_STRING" \
   -v ~/.keeper/ksm-mcp:/home/ksm/.keeper/ksm-mcp \
   keepersecurityinc/ksm-mcp-poc:latest serve
 ```
 
-### Option 4: Binary Installation
+### Build from Source
 
 ```bash
-# Download latest release (macOS/Linux)
-curl -L https://github.com/Keeper-Security/ksm-mcp/releases/latest/download/ksm-mcp-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m | sed 's/x86_64/amd64/') -o ksm-mcp
-chmod +x ksm-mcp
-
-# Or download manually from: https://github.com/Keeper-Security/ksm-mcp/releases/latest
-
-# Initialize with base64 config (get from KSM portal)
-./ksm-mcp init --config "BASE64_CONFIG_STRING"
-
-# Start the server
-./ksm-mcp serve
-```
-
-### Option 5: Build from Source
-
-```bash
-# Clone and build
 git clone https://github.com/keeper-security/ksm-mcp.git
 cd ksm-mcp
 make build
-
-# Initialize with base64 config
 ./bin/ksm-mcp init --config "BASE64_CONFIG_STRING"
 ./bin/ksm-mcp serve
 ```
-
-## 📝 Getting Your Base64 Config
-
-1. Log into your [Keeper Secrets Manager Portal](https://keepersecurity.com/secrets-manager/)
-2. Create or select an application
-3. Generate a One-Time Token
-4. Copy the **base64-encoded configuration string** (starts with `ewog...`)
-5. Use this string in the `--config` parameter during initialization
 
 > **Important**: The base64 config contains your KSM credentials. Keep it secure and never commit it to version control.
 

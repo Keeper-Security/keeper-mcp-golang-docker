@@ -237,36 +237,27 @@ jobs:
         docker load -i /tmp/ksm-mcp-image.tar
         docker tag ksm-mcp:ci-test ksm-mcp:latest
 
-    - name: Create docker-compose override
-      run: |
-        cat > docker-compose.override.yml << EOF
-        version: '3.8'
-        services:
-          ksm-mcp:
-            image: ksm-mcp:latest
-        EOF
-
     - name: Run E2E tests
       run: |
-        # Start services using docker compose (v2)
-        docker compose up -d
+        # Start services using docker compose (v2) with CI config
+        docker compose -f docker-compose.ci.yml up -d
         
         # Wait for services to be ready
         sleep 10
         
         # Check if service is running
-        docker compose ps
+        docker compose -f docker-compose.ci.yml ps
         
         # Run E2E tests
-        docker compose exec -T ksm-mcp ksm-mcp test --run-tests --mode e2e || true
+        docker compose -f docker-compose.ci.yml exec -T ksm-mcp ksm-mcp test --run-tests --mode e2e || true
         
         # Show logs if tests fail
-        docker compose logs
+        docker compose -f docker-compose.ci.yml logs
 
     - name: Collect logs
       if: always()
       run: |
-        docker compose logs > docker-compose.log || true
+        docker compose -f docker-compose.ci.yml logs > docker-compose.log || true
         
     - name: Upload logs
       if: always()
@@ -278,5 +269,5 @@ jobs:
     - name: Cleanup
       if: always()
       run: |
-        docker compose down -v || true
+        docker compose -f docker-compose.ci.yml down -v || true
 
