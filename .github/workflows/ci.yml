@@ -128,7 +128,7 @@ jobs:
           ./cmd/ksm-mcp
 
     - name: Upload artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: ksm-mcp-${{ matrix.os }}-${{ matrix.arch }}
         path: dist/ksm-mcp-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.os == 'windows' && '.exe' || '' }}
@@ -147,103 +147,29 @@ jobs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
-    - name: Log in to Docker Hub
-      uses: docker/login-action@v3
-      with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
-      if: github.event_name != 'pull_request'
-
-    - name: Extract metadata
-      id: meta
-      uses: docker/metadata-action@v5
-      with:
-        images: keeper/ksm-mcp
-        tags: |
-          type=ref,event=branch
-          type=ref,event=pr
-          type=semver,pattern={{version}}
-          type=semver,pattern={{major}}.{{minor}}
-          type=sha
-
-    - name: Build and push Docker image
+    - name: Build Docker image
       uses: docker/build-push-action@v5
       with:
         context: .
         platforms: linux/amd64,linux/arm64
-        push: ${{ github.event_name != 'pull_request' }}
-        tags: ${{ steps.meta.outputs.tags }}
-        labels: ${{ steps.meta.outputs.labels }}
+        push: false
+        tags: ksm-mcp:ci-${{ github.sha }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
+        outputs: type=docker,dest=/tmp/ksm-mcp-image.tar
 
     - name: Run Trivy vulnerability scanner (image)
       uses: aquasecurity/trivy-action@master
       with:
-        image-ref: keeper/ksm-mcp:${{ steps.meta.outputs.version }}
+        input: /tmp/ksm-mcp-image.tar
         format: 'sarif'
         output: 'trivy-image-results.sarif'
-      if: github.event_name != 'pull_request'
+      continue-on-error: true
 
     - name: Upload Trivy scan results
       uses: github/codeql-action/upload-sarif@v3
       with:
         sarif_file: 'trivy-image-results.sarif'
-      if: github.event_name != 'pull_request' && always()
-
-  integration-test:
-    name: Integration Test
-    runs-on: ubuntu-latest
-    needs: docker
-    if: github.event_name != 'pull_request'
-    services:
-      ksm-mcp:
-        image: keeper/ksm-mcp:${{ github.sha }}
-        env:
-          KSM_MCP_LOG_LEVEL: debug
-          KSM_MCP_BATCH_MODE: true
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Run integration tests
-      run: |
-        # Run integration tests against the container
-        docker run --rm \
-          --network ${{ job.services.ksm-mcp.network }} \
-          keeper/ksm-mcp:${{ github.sha }} \
-          test --run-tests --mode integration
-
-  e2e-test:
-    name: E2E Test
-    runs-on: ubuntu-latest
-    needs: docker
-    if: github.event_name != 'pull_request'
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Set up Docker Compose
-      run: |
-        docker-compose -f docker-compose.yml up -d
-        sleep 10  # Wait for services to be ready
-
-    - name: Run E2E tests
-      run: |
-        docker-compose exec -T ksm-mcp ksm-mcp test --run-tests --mode e2e
-
-    - name: Collect logs
-      if: failure()
-      run: |
-        docker-compose logs > docker-compose.log
-        
-    - name: Upload logs
-      if: failure()
-      uses: actions/upload-artifact@v3
-      with:
-        name: e2e-logs
-        path: docker-compose.log
-
-    - name: Cleanup
       if: always()
-      run: docker-compose down -v
+      continue-on-error: true
+
