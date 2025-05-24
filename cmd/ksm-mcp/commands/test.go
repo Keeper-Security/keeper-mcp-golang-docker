@@ -303,12 +303,12 @@ func runTestSuites(cmd *cobra.Command, args []string) error {
 		// Set environment variables
 		if token := os.Getenv("KSM_ONE_TIME_TOKEN"); token == "" {
 			fmt.Println("Warning: KSM_ONE_TIME_TOKEN not set. Using provided test token.")
-			os.Setenv("KSM_ONE_TIME_TOKEN", "US:3J8QgphqMQjeEr_BHvELdfvbRwPNbqr9FgzSo6SqGaU")
+			_ = os.Setenv("KSM_ONE_TIME_TOKEN", "US:3J8QgphqMQjeEr_BHvELdfvbRwPNbqr9FgzSo6SqGaU")
 		}
 		
 		if configFile := os.Getenv("KSM_CONFIG_FILE"); configFile == "" {
 			fmt.Println("Warning: KSM_CONFIG_FILE not set. Using provided path.")
-			os.Setenv("KSM_CONFIG_FILE", "/Users/mustinov/Downloads/config.base64")
+			_ = os.Setenv("KSM_CONFIG_FILE", "/Users/mustinov/Downloads/config.base64")
 		}
 	}
 	
@@ -341,7 +341,7 @@ func runTestSuites(cmd *cobra.Command, args []string) error {
 		if _, err := os.Stat(fixtureDir); err == nil {
 			fmt.Printf("\nCaptured data saved to: %s\n", fixtureDir)
 			fmt.Println("Files:")
-			filepath.Walk(fixtureDir, func(path string, info os.FileInfo, err error) error {
+			_ = filepath.Walk(fixtureDir, func(path string, info os.FileInfo, err error) error {
 				if err == nil && !info.IsDir() {
 					fmt.Printf("  - %s (%d bytes)\n", path, info.Size())
 				}

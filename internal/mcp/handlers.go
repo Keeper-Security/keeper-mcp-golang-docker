@@ -104,7 +104,7 @@ func (s *Server) handleToolCall(request types.MCPRequest, writer *bufio.Writer) 
 	// Route to appropriate tool handler
 	result, err := s.executeTool(params.Name, params.Arguments)
 	if err != nil {
-		s.sendErrorResponse(writer, request.ID, -32002, err.Error(), nil)
+		_ = s.sendErrorResponse(writer, request.ID, -32002, err.Error(), nil)
 		return err
 	}
 

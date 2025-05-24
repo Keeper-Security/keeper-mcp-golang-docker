@@ -247,7 +247,7 @@ func sanitizeFileName(name string) string {
 func LoadFixtures(fixtureFile string) (*CapturedData, error) {
 	// Clean and validate the path
 	cleanPath := filepath.Clean(fixtureFile)
-	data, err := ioutil.ReadFile(cleanPath) // #nosec G304 -- test utility, path is cleaned
+	data, err := ioutil.ReadFile(cleanPath) // #nosec G304 - test utility, path is cleaned
 	if err != nil {
 		return nil, fmt.Errorf("failed to read fixture file: %w", err)
 	}

@@ -124,7 +124,7 @@ func (s *Server) Start(ctx context.Context) error {
 					"message": string(line),
 				})
 				// Send error response
-				s.sendErrorResponse(writer, nil, -32603, err.Error(), nil)
+				_ = s.sendErrorResponse(writer, nil, -32603, err.Error(), nil)
 			}
 		}
 	}
@@ -134,13 +134,13 @@ func (s *Server) Start(ctx context.Context) error {
 func (s *Server) processMessage(data []byte, writer *bufio.Writer) error {
 	var request types.MCPRequest
 	if err := json.Unmarshal(data, &request); err != nil {
-		s.sendErrorResponse(writer, nil, -32700, "Parse error", nil)
+		_ = s.sendErrorResponse(writer, nil, -32700, "Parse error", nil)
 		return fmt.Errorf("failed to parse request: %w", err)
 	}
 
 	// Check rate limit
 	if !s.rateLimiter.Allow(request.Method) {
-		s.sendErrorResponse(writer, request.ID, -32029, "Rate limit exceeded", nil)
+		_ = s.sendErrorResponse(writer, request.ID, -32029, "Rate limit exceeded", nil)
 		return fmt.Errorf("rate limit exceeded")
 	}
 
@@ -167,7 +167,7 @@ func (s *Server) processMessage(data []byte, writer *bufio.Writer) error {
 	case "sessions/end":
 		return s.handleSessionEnd(request, writer)
 	default:
-		s.sendErrorResponse(writer, request.ID, -32601, "Method not found", nil)
+		_ = s.sendErrorResponse(writer, request.ID, -32601, "Method not found", nil)
 		return fmt.Errorf("unknown method: %s", request.Method)
 	}
 }

@@ -100,10 +100,10 @@ func Load(configFile string) (*Config, error) {
 	v.AutomaticEnv()
 	
 	// Map environment variables
-	v.BindEnv("security.batch_mode", "KSM_MCP_BATCH_MODE")
-	v.BindEnv("security.auto_approve", "KSM_MCP_AUTO_APPROVE")
-	v.BindEnv("logging.level", "KSM_MCP_LOG_LEVEL")
-	v.BindEnv("profiles.default", "KSM_MCP_PROFILE")
+	_ = v.BindEnv("security.batch_mode", "KSM_MCP_BATCH_MODE")
+	_ = v.BindEnv("security.auto_approve", "KSM_MCP_AUTO_APPROVE")
+	_ = v.BindEnv("logging.level", "KSM_MCP_LOG_LEVEL")
+	_ = v.BindEnv("profiles.default", "KSM_MCP_PROFILE")
 	
 	// Read config file
 	if err := v.ReadInConfig(); err != nil {

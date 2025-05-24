@@ -72,7 +72,7 @@ func (e *Encryptor) Encrypt(plaintext []byte) (*EncryptedData, error) {
 	}
 
 	// Encrypt the data
-	ciphertext := gcm.Seal(nil, nonce, plaintext, nil) // #nosec G407 -- nonce is randomly generated above
+	ciphertext := gcm.Seal(nil, nonce, plaintext, nil) // #nosec G407 - nonce is randomly generated above
 
 	return &EncryptedData{
 		Salt:       salt,

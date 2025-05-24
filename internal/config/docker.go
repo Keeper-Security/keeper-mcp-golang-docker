@@ -15,7 +15,7 @@ const (
 	// Docker secret paths
 	DockerSecretsPath = "/run/secrets"
 	TokenSecretName   = "ksm_token"
-	ConfigSecretName  = "ksm_config"
+	ConfigSecretName  = "ksm_config" // #nosec G101 - not a credential, just a filename
 	MasterPasswordSecretName = "master_password"
 )
 
@@ -28,8 +28,7 @@ func LoadDockerSecrets() (*types.Profile, error) {
 
 	// Try to load token first
 	tokenPath := filepath.Join(DockerSecretsPath, TokenSecretName)
-	// Path is a well-known Docker secret path
-	if tokenData, err := os.ReadFile(tokenPath); err == nil { // #nosec G304 -- Docker secret path
+	if tokenData, err := os.ReadFile(tokenPath); err == nil { // #nosec G304 - Docker secret path
 		token := strings.TrimSpace(string(tokenData))
 		if token != "" {
 			profile := &types.Profile{
@@ -44,8 +43,7 @@ func LoadDockerSecrets() (*types.Profile, error) {
 
 	// Try to load config file
 	configPath := filepath.Join(DockerSecretsPath, ConfigSecretName)
-	// Path is a well-known Docker secret path
-	if configData, err := os.ReadFile(configPath); err == nil { // #nosec G304 -- Docker secret path
+	if configData, err := os.ReadFile(configPath); err == nil { // #nosec G304 - Docker secret path
 		// Try to parse as JSON first
 		var config map[string]interface{}
 		if err := json.Unmarshal(configData, &config); err == nil {
@@ -99,8 +97,7 @@ func LoadDockerSecrets() (*types.Profile, error) {
 // LoadMasterPasswordFromSecret loads the master password from Docker secret
 func LoadMasterPasswordFromSecret() (string, error) {
 	passwordPath := filepath.Join(DockerSecretsPath, MasterPasswordSecretName)
-	// Path is a well-known Docker secret path
-	if passwordData, err := os.ReadFile(passwordPath); err == nil { // #nosec G304 -- Docker secret path
+	if passwordData, err := os.ReadFile(passwordPath); err == nil { // #nosec G304 - Docker secret path
 		password := strings.TrimSpace(string(passwordData))
 		if password != "" {
 			return password, nil
@@ -117,8 +114,7 @@ func IsRunningInDocker() bool {
 	}
 
 	// Check for Docker in /proc/1/cgroup
-	// Path is a well-known proc file
-	if cgroup, err := os.ReadFile("/proc/1/cgroup"); err == nil { // #nosec G304 -- well-known proc path
+	if cgroup, err := os.ReadFile("/proc/1/cgroup"); err == nil { // #nosec G304 - well-known proc path
 		if strings.Contains(string(cgroup), "docker") {
 			return true
 		}

@@ -91,8 +91,7 @@ func (ps *ProfileStore) initializeMasterKey() error {
 	}
 
 	// Load existing master key
-	// Path is constructed from configDir which should be validated at initialization
-	keyData, err := os.ReadFile(keyPath) // #nosec G304 -- path constructed from validated configDir
+	keyData, err := os.ReadFile(keyPath) // #nosec G304 - path constructed from validated configDir
 	if err != nil {
 		return fmt.Errorf("failed to read master key: %w", err)
 	}
@@ -264,7 +263,7 @@ func (ps *ProfileStore) saveProfiles() error {
 	}
 
 	if err := os.Rename(tempPath, profilesPath); err != nil {
-		os.Remove(tempPath) // Clean up temp file
+		_ = os.Remove(tempPath) // Clean up temp file, ignore error
 		return fmt.Errorf("failed to atomically update profiles file: %w", err)
 	}
 
@@ -282,8 +281,7 @@ func (ps *ProfileStore) loadProfiles() error {
 	}
 
 	// Read profiles file
-	// Path is constructed from configDir which should be validated at initialization
-	data, err := os.ReadFile(profilesPath) // #nosec G304 -- path constructed from validated configDir
+	data, err := os.ReadFile(profilesPath) // #nosec G304 - path constructed from validated configDir
 	if err != nil {
 		return fmt.Errorf("failed to read profiles file: %w", err)
 	}

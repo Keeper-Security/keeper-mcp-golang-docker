@@ -123,7 +123,7 @@ func runProfilesList(cmd *cobra.Command, args []string) error {
 
 		fmt.Fprintf(w, "%s\t%s\n", name, isDefault)
 	}
-	w.Flush()
+	_ = w.Flush()
 
 	return nil
 }
@@ -169,7 +169,7 @@ func runProfilesDelete(cmd *cobra.Command, args []string) error {
 	fmt.Print("Type 'yes' to confirm: ")
 	
 	var confirm string
-	fmt.Scanln(&confirm)
+	_, _ = fmt.Scanln(&confirm)
 	if strings.ToLower(strings.TrimSpace(confirm)) != "yes" {
 		fmt.Println("Deletion cancelled.")
 		return nil

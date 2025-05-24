@@ -299,12 +299,12 @@ func (l *Logger) writeEvent(event *AuditEvent) {
 // rotate performs log rotation
 func (l *Logger) rotate() {
 	// Close current file
-	l.file.Close()
+	_ = l.file.Close()
 	
 	// Rename current file with timestamp
 	timestamp := time.Now().Format("20060102-150405")
 	rotatedPath := fmt.Sprintf("%s.%s", l.filepath, timestamp)
-	os.Rename(l.filepath, rotatedPath)
+	_ = os.Rename(l.filepath, rotatedPath)
 	
 	// Open new file
 	file, err := os.OpenFile(l.filepath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
@@ -349,7 +349,7 @@ func (l *Logger) performMaintenance() {
 		}
 		
 		if info.ModTime().Before(cutoff) {
-			os.Remove(filepath.Join(dir, name))
+			_ = os.Remove(filepath.Join(dir, name))
 		}
 	}
 }

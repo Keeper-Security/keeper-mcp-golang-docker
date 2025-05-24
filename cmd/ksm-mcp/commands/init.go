@@ -51,7 +51,7 @@ func init() {
 	initCmd.Flags().StringVar(&initToken, "token", "", "one-time token (US:TOKEN_HERE)")
 	initCmd.Flags().StringVar(&initConfig, "config", "", "path to KSM config file or base64-encoded config")
 	initCmd.Flags().BoolVar(&initNoMasterPassword, "no-master-password", false, "disable master password protection (NOT RECOMMENDED)")
-	initCmd.MarkFlagRequired("profile")
+	_ = initCmd.MarkFlagRequired("profile")
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
@@ -197,7 +197,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 			
 			// Clean and validate the path
 			cleanPath := filepath.Clean(configPath)
-			configData, err = os.ReadFile(cleanPath) // #nosec G304 -- user-provided path for config
+			configData, err = os.ReadFile(cleanPath) // #nosec G304 - user-provided path for config
 			if err != nil {
 				return fmt.Errorf("failed to read config file: %w", err)
 			}
