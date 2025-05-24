@@ -70,7 +70,7 @@ jobs:
 
       - name: Run integration tests
         run: |
-          go test -v -tags=integration ./test/integration/...
+          go test -v -tags=integration ./internal/testing/integration/...
 
       - name: Run security scan
         run: |
