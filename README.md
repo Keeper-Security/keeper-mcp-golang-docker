@@ -9,10 +9,15 @@ A secure Model Context Protocol (MCP) server for Keeper Secrets Manager (KSM) th
 
 ## 📋 Quick Start Guide
 
+**One-liner for the impatient** (after getting your base64 config):
+```bash
+docker run -it --rm -e KSM_CONFIG_BASE64="YOUR_CONFIG" -v ~/.keeper/ksm-mcp:/home/ksm/.keeper/ksm-mcp keepersecurityinc/ksm-mcp-poc:latest serve
+```
+
 KSM MCP lets AI assistants manage your secrets securely:
 - **What**: Bridge between AI (like Claude) and Keeper Secrets Manager
 - **Why**: AI never sees your KSM credentials or master password
-- **How**: Install → Initialize with base64 config → AI can now manage secrets safely
+- **How**: Get base64 config → Run container → AI can now manage secrets
 - **Security**: All sensitive operations require human confirmation
 
 > **Note**: This guide uses base64-encoded configuration for the fastest setup. For production deployments, see [Advanced Configuration](#advanced-configuration).
@@ -31,24 +36,54 @@ KSM MCP acts as a secure intermediary between AI agents and Keeper Secrets Manag
 
 ## 🚀 Quick Start (Under 2 Minutes)
 
-### Option 1: Docker (Recommended)
+### Option 1: Claude Desktop + Docker Compose (Easiest)
+
+1. **Create a single file** `claude_desktop_config.json`:
+   - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+   - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+   - Linux: `~/.config/Claude/claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "ksm": {
+      "command": "docker",
+      "args": ["compose", "-f", "/Users/YOUR_USERNAME/ksm-mcp/docker-compose.yml", "up"],
+      "env": {
+        "KSM_CONFIG_BASE64": "YOUR_BASE64_CONFIG_STRING_HERE"
+      }
+    }
+  }
+}
+```
+
+2. **Create** `docker-compose.yml` (minimal, just 8 lines!):
+```yaml
+version: '3'
+services:
+  ksm-mcp:
+    image: keepersecurityinc/ksm-mcp-poc:latest
+    environment:
+      - KSM_CONFIG_BASE64
+    volumes:
+      - ~/.keeper/ksm-mcp:/home/ksm/.keeper/ksm-mcp
+    stdin_open: true
+    tty: true
+```
+
+3. **Restart Claude Desktop** - That's it! KSM MCP will auto-initialize on first run.
+
+### Option 2: Docker (Manual)
 
 ```bash
-# Pull the image
-docker pull keepersecurityinc/ksm-mcp-poc:latest
-
-# Initialize with base64 config (get from KSM portal)
+# Single command with auto-initialization
 docker run -it --rm \
-  keepersecurityinc/ksm-mcp-poc:latest \
-  init --config "BASE64_CONFIG_STRING"
-
-# Start the server
-docker run -it --rm \
+  -e KSM_CONFIG_BASE64="YOUR_BASE64_CONFIG_STRING" \
   -v ~/.keeper/ksm-mcp:/home/ksm/.keeper/ksm-mcp \
   keepersecurityinc/ksm-mcp-poc:latest serve
 ```
 
-### Option 2: Binary Installation
+### Option 3: Binary Installation
 
 ```bash
 # Download latest release (macOS/Linux)
@@ -64,7 +99,7 @@ chmod +x ksm-mcp
 ./ksm-mcp serve
 ```
 
-### Option 3: Build from Source
+### Option 4: Build from Source
 
 ```bash
 # Clone and build
@@ -87,16 +122,11 @@ make build
 
 > **Important**: The base64 config contains your KSM credentials. Keep it secure and never commit it to version control.
 
-## 🔧 Configuration
+## 🔧 Alternative Claude Desktop Configurations
 
-### Claude Desktop Integration
+### If you've already initialized KSM MCP:
 
-Add to your Claude Desktop configuration:
-
-**macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`  
-**Windows**: `%APPDATA%\Claude\claude_desktop_config.json`  
-**Linux**: `~/.config/Claude/claude_desktop_config.json`
-
+**For Binary Users:**
 ```json
 {
   "mcpServers": {
@@ -108,7 +138,7 @@ Add to your Claude Desktop configuration:
 }
 ```
 
-For Docker:
+**For Docker Users (without docker-compose):**
 ```json
 {
   "mcpServers": {

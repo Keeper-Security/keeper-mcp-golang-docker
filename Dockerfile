@@ -48,24 +48,28 @@ FROM alpine:latest
 RUN apk --no-cache add ca-certificates tzdata
 
 # Create non-root user
-RUN addgroup -g 1000 -S keeper && \
-    adduser -u 1000 -S keeper -G keeper
+RUN addgroup -g 1000 -S ksm && \
+    adduser -u 1000 -S ksm -G ksm
 
 # Create necessary directories
-RUN mkdir -p /home/keeper/.keeper/ksm-mcp && \
+RUN mkdir -p /home/ksm/.keeper/ksm-mcp && \
     mkdir -p /var/log/ksm-mcp && \
-    chown -R keeper:keeper /home/keeper /var/log/ksm-mcp
+    chown -R ksm:ksm /home/ksm /var/log/ksm-mcp
 
 # Copy binary and config from builder
 COPY --from=builder /build/ksm-mcp /usr/local/bin/ksm-mcp
-COPY --from=builder /build/config.yaml.example /home/keeper/.keeper/ksm-mcp/config.yaml.example
+COPY --from=builder /build/config.yaml.example /home/ksm/.keeper/ksm-mcp/config.yaml.example
+
+# Copy entrypoint script
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Set up volumes for persistent data and secrets
-VOLUME ["/home/keeper/.keeper/ksm-mcp", "/run/secrets", "/var/log/ksm-mcp"]
+VOLUME ["/home/ksm/.keeper/ksm-mcp", "/run/secrets", "/var/log/ksm-mcp"]
 
 # Switch to non-root user
-USER keeper
-WORKDIR /home/keeper
+USER ksm
+WORKDIR /home/ksm
 
 # Add health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
@@ -79,14 +83,14 @@ LABEL org.opencontainers.image.title="KSM MCP Server" \
       org.opencontainers.image.documentation="https://github.com/keeper-security/ksm-mcp/blob/main/README.md"
 
 # Default environment variables
-ENV KSM_MCP_CONFIG_DIR=/home/keeper/.keeper/ksm-mcp \
+ENV KSM_MCP_CONFIG_DIR=/home/ksm/.keeper/ksm-mcp \
     KSM_MCP_LOG_DIR=/var/log/ksm-mcp \
     KSM_MCP_LOG_LEVEL=info \
-    KSM_MCP_PROFILE=docker
+    KSM_MCP_PROFILE=default
 
 # Expose MCP server port (stdio mode doesn't need ports, but useful for health checks)
 EXPOSE 8080
 
 # Set entrypoint with default command
-ENTRYPOINT ["ksm-mcp"]
-CMD ["serve"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+CMD ["ksm-mcp", "serve"]

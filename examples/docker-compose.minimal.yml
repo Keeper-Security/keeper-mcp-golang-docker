@@ -1,0 +1,10 @@
+version: '3'
+services:
+  ksm-mcp:
+    image: keepersecurityinc/ksm-mcp-poc:latest
+    environment:
+      - KSM_CONFIG_BASE64=YOUR_BASE64_CONFIG_STRING
+    volumes:
+      - ~/.keeper/ksm-mcp:/home/ksm/.keeper/ksm-mcp
+    stdin_open: true
+    tty: true

@@ -55,15 +55,17 @@ func init() {
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
-	// Check for KSM_CONFIG environment variable if no flags provided
+	// Check for KSM_CONFIG_BASE64 or KSM_CONFIG environment variable if no flags provided
 	if initToken == "" && initConfig == "" {
-		if envConfig := os.Getenv("KSM_CONFIG"); envConfig != "" {
+		if envConfig := os.Getenv("KSM_CONFIG_BASE64"); envConfig != "" {
+			initConfig = envConfig
+		} else if envConfig := os.Getenv("KSM_CONFIG"); envConfig != "" {
 			initConfig = envConfig
 		}
 	}
 
 	if initToken == "" && initConfig == "" {
-		return fmt.Errorf("either --token, --config, or KSM_CONFIG environment variable must be provided")
+		return fmt.Errorf("either --token, --config, KSM_CONFIG_BASE64 or KSM_CONFIG environment variable must be provided")
 	}
 
 	// Validate only one config source is provided
