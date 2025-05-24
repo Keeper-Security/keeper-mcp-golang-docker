@@ -31,12 +31,12 @@ type RateLimit struct {
 
 // SecurityConfig represents security settings
 type SecurityConfig struct {
-	BatchMode            bool          `mapstructure:"batch_mode"`
-	AutoApprove          bool          `mapstructure:"auto_approve"`
-	MaskByDefault        bool          `mapstructure:"mask_by_default"`
-	SessionTimeout       time.Duration `mapstructure:"session_timeout"`
-	ConfirmationTimeout  time.Duration `mapstructure:"confirmation_timeout"`
-	MasterPasswordHash   string        `mapstructure:"master_password_hash"`
+	BatchMode           bool          `mapstructure:"batch_mode"`
+	AutoApprove         bool          `mapstructure:"auto_approve"`
+	MaskByDefault       bool          `mapstructure:"mask_by_default"`
+	SessionTimeout      time.Duration `mapstructure:"session_timeout"`
+	ConfirmationTimeout time.Duration `mapstructure:"confirmation_timeout"`
+	MasterPasswordHash  string        `mapstructure:"master_password_hash"`
 }
 
 // LoggingConfig represents logging configuration
@@ -80,31 +80,31 @@ func DefaultConfig() *Config {
 // Load loads configuration from file
 func Load(configFile string) (*Config, error) {
 	config := DefaultConfig()
-	
+
 	v := viper.New()
 	v.SetConfigName("config")
 	v.SetConfigType("yaml")
-	
+
 	// Set default search paths
 	configDir := getConfigDir()
 	v.AddConfigPath(configDir)
 	v.AddConfigPath(".")
-	
+
 	// If specific config file is provided, use it
 	if configFile != "" {
 		v.SetConfigFile(configFile)
 	}
-	
+
 	// Environment variable overrides
 	v.SetEnvPrefix("KSM_MCP")
 	v.AutomaticEnv()
-	
+
 	// Map environment variables
 	_ = v.BindEnv("security.batch_mode", "KSM_MCP_BATCH_MODE")
 	_ = v.BindEnv("security.auto_approve", "KSM_MCP_AUTO_APPROVE")
 	_ = v.BindEnv("logging.level", "KSM_MCP_LOG_LEVEL")
 	_ = v.BindEnv("profiles.default", "KSM_MCP_PROFILE")
-	
+
 	// Read config file
 	if err := v.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
@@ -112,17 +112,17 @@ func Load(configFile string) (*Config, error) {
 		}
 		// Config file not found is okay, we'll use defaults
 	}
-	
+
 	// Unmarshal config
 	if err := v.Unmarshal(config); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
-	
+
 	// Set default log file if not specified
 	if config.Logging.File == "" {
 		config.Logging.File = filepath.Join(configDir, "audit.log")
 	}
-	
+
 	return config, nil
 }
 
@@ -131,15 +131,15 @@ func (c *Config) Save(configFile string) error {
 	if configFile == "" {
 		configFile = filepath.Join(getConfigDir(), "config.yaml")
 	}
-	
+
 	// Ensure config directory exists
 	if err := os.MkdirAll(filepath.Dir(configFile), 0700); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
-	
+
 	v := viper.New()
 	v.SetConfigFile(configFile)
-	
+
 	// Set values
 	v.Set("mcp.timeout", c.MCP.Timeout)
 	v.Set("mcp.rate_limit.requests_per_minute", c.MCP.RateLimit.RequestsPerMinute)
@@ -153,7 +153,7 @@ func (c *Config) Save(configFile string) error {
 	v.Set("logging.level", c.Logging.Level)
 	v.Set("logging.file", c.Logging.File)
 	v.Set("profiles.default", c.Profiles.Default)
-	
+
 	return v.WriteConfig()
 }
 
@@ -167,12 +167,12 @@ func getConfigDir() string {
 	if configDir := os.Getenv("KSM_MCP_CONFIG_DIR"); configDir != "" {
 		return configDir
 	}
-	
+
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return ".keeper/ksm-mcp"
 	}
-	
+
 	return filepath.Join(homeDir, ".keeper", "ksm-mcp")
 }
 
@@ -202,7 +202,7 @@ func LoadOrCreate(configFile string) (*Config, error) {
 
 	// Config doesn't exist, create default
 	config = DefaultConfig()
-	
+
 	// Save the default config
 	if err := config.Save(configFile); err != nil {
 		return nil, fmt.Errorf("failed to save default config: %w", err)

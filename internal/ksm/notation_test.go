@@ -358,60 +358,60 @@ func TestIsCustomFieldNotation(t *testing.T) {
 
 func TestSplitNotationParts(t *testing.T) {
 	tests := []struct {
-		name      string
-		notation  string
-		wantRef   string
-		wantType  string
-		wantPath  string
-		wantErr   bool
+		name     string
+		notation string
+		wantRef  string
+		wantType string
+		wantPath string
+		wantErr  bool
 	}{
 		{
-			name:      "simple field",
-			notation:  "UID123/field/password",
-			wantRef:   "UID123",
-			wantType:  "field",
-			wantPath:  "password",
-			wantErr:   false,
+			name:     "simple field",
+			notation: "UID123/field/password",
+			wantRef:  "UID123",
+			wantType: "field",
+			wantPath: "password",
+			wantErr:  false,
 		},
 		{
-			name:      "custom field with array",
-			notation:  "UID123/custom_field/phones[0]",
-			wantRef:   "UID123",
-			wantType:  "custom_field",
-			wantPath:  "phones[0]",
-			wantErr:   false,
+			name:     "custom field with array",
+			notation: "UID123/custom_field/phones[0]",
+			wantRef:  "UID123",
+			wantType: "custom_field",
+			wantPath: "phones[0]",
+			wantErr:  false,
 		},
 		{
-			name:      "file with path",
-			notation:  "UID123/file/folder/document.pdf",
-			wantRef:   "UID123",
-			wantType:  "file",
-			wantPath:  "folder/document.pdf",
-			wantErr:   false,
+			name:     "file with path",
+			notation: "UID123/file/folder/document.pdf",
+			wantRef:  "UID123",
+			wantType: "file",
+			wantPath: "folder/document.pdf",
+			wantErr:  false,
 		},
 		{
-			name:      "title based",
-			notation:  "My Secret/field/password",
-			wantRef:   "My Secret",
-			wantType:  "field",
-			wantPath:  "password",
-			wantErr:   false,
+			name:     "title based",
+			notation: "My Secret/field/password",
+			wantRef:  "My Secret",
+			wantType: "field",
+			wantPath: "password",
+			wantErr:  false,
 		},
 		{
-			name:      "invalid - too short",
-			notation:  "UID123/field",
-			wantRef:   "",
-			wantType:  "",
-			wantPath:  "",
-			wantErr:   true,
+			name:     "invalid - too short",
+			notation: "UID123/field",
+			wantRef:  "",
+			wantType: "",
+			wantPath: "",
+			wantErr:  true,
 		},
 		{
-			name:      "invalid - empty",
-			notation:  "",
-			wantRef:   "",
-			wantType:  "",
-			wantPath:  "",
-			wantErr:   true,
+			name:     "invalid - empty",
+			notation: "",
+			wantRef:  "",
+			wantType: "",
+			wantPath: "",
+			wantErr:  true,
 		},
 	}
 

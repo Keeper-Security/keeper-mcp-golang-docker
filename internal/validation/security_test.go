@@ -10,11 +10,11 @@ func TestValidator_SecurityAttackVectors(t *testing.T) {
 	v := NewValidator()
 
 	tests := []struct {
-		name         string
-		testFunc     func(string) error
-		input        string
-		expectError  bool
-		description  string
+		name        string
+		testFunc    func(string) error
+		input       string
+		expectError bool
+		description string
 	}{
 		// SQL Injection Tests
 		{
@@ -196,7 +196,7 @@ func TestValidator_SecurityAttackVectors(t *testing.T) {
 			name:        "Unicode - homograph",
 			testFunc:    v.ValidateURL,
 			input:       "https://gооgle.com", // Using Cyrillic 'о'
-			expectError: false, // URLs should be validated differently
+			expectError: false,                // URLs should be validated differently
 			description: "Should handle homograph attacks",
 		},
 
@@ -266,7 +266,7 @@ func TestValidator_SecurityAttackVectors(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.testFunc(tt.input)
-			
+
 			if tt.expectError && err == nil {
 				t.Errorf("%s: expected error but got none", tt.description)
 			} else if !tt.expectError && err != nil {
@@ -302,7 +302,7 @@ func TestValidator_ShellEscapingSecurity(t *testing.T) {
 	for _, input := range dangerousInputs {
 		t.Run(input, func(t *testing.T) {
 			escaped := v.escapeShellArg(input)
-			
+
 			// Check that dangerous characters are escaped
 			dangerousChars := []string{";", "|", "&", "$", "`", "(", ")", "<", ">", "\n", "\r", "\"", "'"}
 			for _, char := range dangerousChars {
@@ -313,7 +313,7 @@ func TestValidator_ShellEscapingSecurity(t *testing.T) {
 					}
 				}
 			}
-			
+
 			// Ensure the escaped string is single-quoted
 			if !strings.HasPrefix(escaped, "'") || !strings.HasSuffix(escaped, "'") {
 				t.Errorf("escaped string should be single-quoted: %s", escaped)
@@ -357,7 +357,7 @@ func TestValidator_KSMNotationSecurity(t *testing.T) {
 			expectError: true,
 			description: "SQL injection in property",
 		},
-		
+
 		// Valid notations
 		{
 			notation:    "NJ_xXSkk3xYI1h9ql5lAiQ/field/password",
@@ -379,7 +379,7 @@ func TestValidator_KSMNotationSecurity(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.description, func(t *testing.T) {
 			err := v.ValidateKSMNotation(tt.notation)
-			
+
 			if tt.expectError && err == nil {
 				t.Errorf("expected error for %s", tt.description)
 			} else if !tt.expectError && err != nil {
@@ -447,7 +447,7 @@ func TestValidator_MaxLengthEnforcement(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.testFunc(tt.input)
-			
+
 			if tt.expectError && err == nil {
 				t.Error("expected error for input exceeding max length")
 			} else if !tt.expectError && err != nil {

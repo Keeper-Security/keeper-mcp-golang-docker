@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"strings"
 
-	sm "github.com/keeper-security/secrets-manager-go/core"
 	"github.com/keeper-security/ksm-mcp/internal/audit"
 	"github.com/keeper-security/ksm-mcp/internal/validation"
 	"github.com/keeper-security/ksm-mcp/pkg/types"
+	sm "github.com/keeper-security/secrets-manager-go/core"
 )
 
 // Client wraps the KSM SDK client
@@ -75,7 +75,7 @@ func InitializeWithToken(token string) (map[string]string, error) {
 	// Extract configuration
 	config := make(map[string]string)
 	keys := []string{"clientId", "privateKey", "appKey", "hostname"}
-	
+
 	// Get storage data and extract fields
 	storageData := storage.ReadStorage()
 	for _, key := range keys {
@@ -272,24 +272,24 @@ func (c *Client) SearchSecrets(query string) ([]*types.SecretMetadata, error) {
 
 	for _, record := range records {
 		found := false
-		
+
 		// Search in title
 		if strings.Contains(strings.ToLower(record.Title()), queryLower) {
 			found = true
 		}
-		
+
 		// Search in notes if not already found
 		if !found && record.Notes() != "" {
 			if strings.Contains(strings.ToLower(record.Notes()), queryLower) {
 				found = true
 			}
 		}
-		
+
 		// Search in record type if not already found
 		if !found && strings.Contains(strings.ToLower(record.Type()), queryLower) {
 			found = true
 		}
-		
+
 		// Search in field values if not already found
 		if !found {
 			// Check standard fields
@@ -302,7 +302,7 @@ func (c *Client) SearchSecrets(query string) ([]*types.SecretMetadata, error) {
 					}
 				}
 			}
-			
+
 			// Check file attachments
 			if !found && record.Files != nil {
 				for _, file := range record.Files {
@@ -316,11 +316,11 @@ func (c *Client) SearchSecrets(query string) ([]*types.SecretMetadata, error) {
 					}
 				}
 			}
-			
+
 			// TODO: Add custom field search when SDK provides access
 			// Currently the SDK doesn't expose a method to iterate custom fields
 		}
-		
+
 		if found {
 			results = append(results, &types.SecretMetadata{
 				UID:    record.Uid,
@@ -372,7 +372,7 @@ func (c *Client) GetField(notation string, unmask bool) (interface{}, error) {
 			}
 			return value, nil
 		}
-		
+
 		// For multiple values, mask if needed
 		if !unmask && isSensitiveField(parsedNotation.Field) {
 			maskedResults := make([]interface{}, len(results))
@@ -385,7 +385,7 @@ func (c *Client) GetField(notation string, unmask bool) (interface{}, error) {
 			}
 			return maskedResults, nil
 		}
-		
+
 		return results, nil
 	}
 
@@ -427,7 +427,7 @@ func (c *Client) GeneratePassword(params types.GeneratePasswordParams) (string, 
 	} else {
 		special = "0"
 	}
-	
+
 	password, err := sm.GeneratePassword(
 		params.Length,
 		lowercase,
@@ -470,7 +470,7 @@ func (c *Client) GetTOTPCode(uid string) (*types.TOTPResponse, error) {
 	// Look for TOTP field
 	// Try different field names where TOTP might be stored
 	var totpURL string
-	
+
 	// Check standard fields
 	if record.Password() != "" && strings.HasPrefix(record.Password(), "otpauth://") {
 		totpURL = record.Password()
@@ -486,8 +486,9 @@ func (c *Client) GetTOTPCode(uid string) (*types.TOTPResponse, error) {
 							if value, hasValue := fieldMap["value"]; hasValue {
 								if values, ok := value.([]interface{}); ok && len(values) > 0 {
 									if url, ok := values[0].(string); ok {
-									totpURL = url
-									break
+										totpURL = url
+										break
+									}
 								}
 							}
 						}
@@ -495,7 +496,6 @@ func (c *Client) GetTOTPCode(uid string) (*types.TOTPResponse, error) {
 				}
 			}
 		}
-	}
 	}
 
 	if totpURL == "" {
@@ -540,17 +540,17 @@ func (c *Client) CreateSecret(params types.CreateSecretParams) (string, error) {
 
 	// Create new record data
 	recordData := sm.NewRecordCreate(params.Type, params.Title)
-	
+
 	// Set notes
 	if params.Notes != "" {
 		recordData.Notes = params.Notes
 	}
-	
+
 	// Add fields from params
 	var fields []interface{}
 	for _, field := range params.Fields {
 		fields = append(fields, map[string]interface{}{
-			"type": field.Type,
+			"type":  field.Type,
 			"value": field.Value,
 		})
 	}
@@ -640,7 +640,7 @@ func (c *Client) DeleteSecret(uid string, confirm bool) error {
 		})
 		return fmt.Errorf("failed to delete secret: %w", err)
 	}
-	
+
 	// Check if deletion was successful
 	if status, exists := statuses[uid]; exists && status != "success" {
 		return fmt.Errorf("failed to delete secret: %s", status)
@@ -677,7 +677,7 @@ func (c *Client) UploadFile(uid, filePath, title string) error {
 	if err != nil {
 		return fmt.Errorf("failed to prepare file for upload: %w", err)
 	}
-	
+
 	// Upload the file
 	fileUID, err := c.sm.UploadFile(record, file)
 	if err != nil {
@@ -687,7 +687,7 @@ func (c *Client) UploadFile(uid, filePath, title string) error {
 		})
 		return fmt.Errorf("failed to upload file: %w", err)
 	}
-	
+
 	_ = fileUID // File UID is available if needed
 
 	return nil
@@ -715,7 +715,7 @@ func (c *Client) DownloadFile(uid, fileUID, savePath string) error {
 
 	// Find the file
 	var targetFile *sm.KeeperFile
-	
+
 	for _, file := range record.Files {
 		if file.Uid == fileUID || file.Title == fileUID {
 			targetFile = file
@@ -800,7 +800,7 @@ func (c *Client) TestConnection() error {
 	if err != nil {
 		return fmt.Errorf("connection test failed: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -821,7 +821,7 @@ func isSensitiveField(field string) bool {
 		"cardNumber", "cardSecurityCode", "accountNumber",
 		"pin", "passphrase", "auth",
 	}
-	
+
 	fieldLower := strings.ToLower(field)
 	for _, sensitive := range sensitiveFields {
 		if strings.Contains(fieldLower, strings.ToLower(sensitive)) {

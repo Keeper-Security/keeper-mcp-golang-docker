@@ -13,9 +13,9 @@ import (
 
 const (
 	// Docker secret paths
-	DockerSecretsPath = "/run/secrets"
-	TokenSecretName   = "ksm_token"
-	ConfigSecretName  = "ksm_config" // #nosec G101 - not a credential, just a filename
+	DockerSecretsPath        = "/run/secrets"
+	TokenSecretName          = "ksm_token"
+	ConfigSecretName         = "ksm_config" // #nosec G101 - not a credential, just a filename
 	MasterPasswordSecretName = "master_password"
 )
 

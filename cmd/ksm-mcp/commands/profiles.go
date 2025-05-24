@@ -91,7 +91,7 @@ func runProfilesList(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("failed to read password: %w", err)
 		}
-		
+
 		store, err = storage.NewProfileStoreWithPassword(configDir, password)
 		if err != nil {
 			return fmt.Errorf("failed to unlock profile store: %w", err)
@@ -155,7 +155,7 @@ func runProfilesDelete(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("failed to read password: %w", err)
 		}
-		
+
 		store, err = storage.NewProfileStoreWithPassword(configDir, password)
 		if err != nil {
 			return fmt.Errorf("failed to unlock profile store: %w", err)
@@ -167,7 +167,7 @@ func runProfilesDelete(cmd *cobra.Command, args []string) error {
 	// Confirm deletion
 	fmt.Printf("Are you sure you want to delete profile '%s'? This action cannot be undone.\n", profileName)
 	fmt.Print("Type 'yes' to confirm: ")
-	
+
 	var confirm string
 	_, _ = fmt.Scanln(&confirm)
 	if strings.ToLower(strings.TrimSpace(confirm)) != "yes" {
@@ -220,7 +220,7 @@ func runProfilesSetDefault(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("failed to read password: %w", err)
 		}
-		
+
 		store, err = storage.NewProfileStoreWithPassword(configDir, password)
 		if err != nil {
 			return fmt.Errorf("failed to unlock profile store: %w", err)
@@ -271,7 +271,7 @@ func runProfilesShow(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("failed to read password: %w", err)
 		}
-		
+
 		store, err = storage.NewProfileStoreWithPassword(configDir, password)
 		if err != nil {
 			return fmt.Errorf("failed to unlock profile store: %w", err)
@@ -289,11 +289,11 @@ func runProfilesShow(cmd *cobra.Command, args []string) error {
 	// Display profile information
 	fmt.Printf("Profile: %s\n", profile.Name)
 	fmt.Printf("Default: %v\n", profile.Name == cfg.Profiles.Default)
-	
+
 	if !profile.CreatedAt.IsZero() {
 		fmt.Printf("Created: %s\n", profile.CreatedAt.Format(time.RFC3339))
 	}
-	
+
 	if !profile.UpdatedAt.IsZero() {
 		fmt.Printf("Updated: %s\n", profile.UpdatedAt.Format(time.RFC3339))
 	}

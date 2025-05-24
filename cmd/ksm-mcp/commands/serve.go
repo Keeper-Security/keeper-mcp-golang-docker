@@ -116,7 +116,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	// Log to stderr since stdout is used for MCP protocol
 	fmt.Fprintf(os.Stderr, "Starting KSM MCP server...\n")
 	fmt.Fprintf(os.Stderr, "Using profile: %s\n", profileName)
-	
+
 	if serveBatch {
 		fmt.Fprintf(os.Stderr, "Running in batch mode (no prompts)\n")
 	}
@@ -128,7 +128,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	var store *storage.ProfileStore
 	if cfg.Security.MasterPasswordHash != "" {
 		var password string
-		
+
 		// Try to load from Docker secret first
 		if config.IsRunningInDocker() {
 			if secretPassword, err := config.LoadMasterPasswordFromSecret(); err == nil {
@@ -136,7 +136,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 				fmt.Fprintf(os.Stderr, "Loaded master password from Docker secret\n")
 			}
 		}
-		
+
 		// If not in Docker or secret not found, prompt
 		if password == "" {
 			fmt.Fprint(os.Stderr, "Enter master password: ")
@@ -146,7 +146,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 				return fmt.Errorf("failed to read password: %w", err)
 			}
 		}
-		
+
 		store, err = storage.NewProfileStoreWithPassword(configDir, password)
 		if err != nil {
 			return fmt.Errorf("failed to unlock profile store: %w", err)
@@ -154,7 +154,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	} else {
 		store = storage.NewProfileStore(configDir)
 	}
-	
+
 	// If using Docker profile, add it to the store
 	if dockerProfile != nil && profileName == "docker" {
 		if err := store.CreateProfile(dockerProfile.Name, dockerProfile.Config); err != nil {
@@ -169,7 +169,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	logPath := filepath.Join(configDir, "logs", "audit.log")
 	logger, err := audit.NewLogger(audit.Config{
 		FilePath: logPath,
-		MaxSize:  100 * 1024 * 1024, // 100MB in bytes
+		MaxSize:  100 * 1024 * 1024,   // 100MB in bytes
 		MaxAge:   30 * 24 * time.Hour, // 30 days
 	})
 	if err != nil {
@@ -185,7 +185,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 		ProfileName: profileName,
 		RateLimit:   100, // requests per minute
 	}
-	
+
 	server := mcp.NewServer(store, logger, serverOpts)
 
 	// Set up signal handling for graceful shutdown
@@ -194,7 +194,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-	
+
 	go func() {
 		<-sigChan
 		fmt.Fprintf(os.Stderr, "\nShutting down server...\n")
@@ -203,11 +203,11 @@ func runServe(cmd *cobra.Command, args []string) error {
 
 	// Start the server
 	fmt.Fprintf(os.Stderr, "Server ready. Starting MCP server...\n")
-	
+
 	// The server handles its own stdio reading/writing
 	if err := server.Start(ctx); err != nil {
 		return fmt.Errorf("server error: %w", err)
 	}
-	
+
 	return nil
 }

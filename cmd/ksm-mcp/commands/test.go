@@ -106,7 +106,7 @@ func runTest(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("failed to read password: %w", err)
 		}
-		
+
 		store, err = storage.NewProfileStoreWithPassword(configDir, password)
 		if err != nil {
 			return fmt.Errorf("failed to unlock profile store: %w", err)
@@ -138,7 +138,7 @@ func runTest(cmd *cobra.Command, args []string) error {
 	start := time.Now()
 	secrets, err := client.ListSecrets("")
 	elapsed := time.Since(start)
-	
+
 	if err != nil {
 		fmt.Println("✗")
 		return fmt.Errorf("connection failed: %w", err)
@@ -156,7 +156,7 @@ func runTest(cmd *cobra.Command, args []string) error {
 		for _, s := range secrets {
 			typeCounts[s.Type]++
 		}
-		
+
 		for typ, count := range typeCounts {
 			fmt.Printf("  - %s: %d\n", typ, count)
 		}
@@ -177,7 +177,7 @@ func runTest(cmd *cobra.Command, args []string) error {
 				}
 				fmt.Printf("   Retrieved: %s (type: %s)\n", title, secretType)
 			}
-			
+
 			// Show available fields
 			if fields, ok := secret["fields"].(map[string]interface{}); ok && len(fields) > 0 {
 				fmt.Println("   Available fields:")
@@ -197,7 +197,7 @@ func runTest(cmd *cobra.Command, args []string) error {
 		searchStart := time.Now()
 		searchResults, err := client.SearchSecrets("")
 		searchElapsed := time.Since(searchStart)
-		
+
 		if err != nil {
 			fmt.Println("✗")
 			fmt.Printf("   Search failed: %v\n", err)
@@ -231,7 +231,7 @@ func isSensitiveField(fieldType string) bool {
 		"private_key", "privateKey", "passphrase", "pin",
 		"cardNumber", "securityCode", "cvv",
 	}
-	
+
 	fieldLower := strings.ToLower(fieldType)
 	for _, s := range sensitive {
 		if strings.Contains(fieldLower, strings.ToLower(s)) {
@@ -250,7 +250,7 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 
 func runTestSuites(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Running KSM MCP test suites (mode: %s)\n", testMode)
-	
+
 	// Determine which test packages to run
 	var testPackages []string
 	switch testMode {
@@ -274,67 +274,67 @@ func runTestSuites(cmd *cobra.Command, args []string) error {
 	default:
 		return fmt.Errorf("invalid test mode: %s", testMode)
 	}
-	
+
 	// Build test command
 	testArgs := []string{"test"}
-	
+
 	// Add coverage if not capturing data
 	if !captureData {
 		testArgs = append(testArgs, "-cover")
 	}
-	
+
 	// Add timeout
 	testArgs = append(testArgs, "-timeout", testTimeout)
-	
+
 	// Add verbose flag
 	if verbose {
 		testArgs = append(testArgs, "-v")
 	}
-	
+
 	// Add test filter
 	if testFilter != "" {
 		testArgs = append(testArgs, "-run", testFilter)
 	}
-	
+
 	// Add capture flag for integration tests
 	if captureData && testMode == "integration" {
 		testArgs = append(testArgs, "-capture")
-		
+
 		// Set environment variables
 		if token := os.Getenv("KSM_ONE_TIME_TOKEN"); token == "" {
 			fmt.Println("Warning: KSM_ONE_TIME_TOKEN not set. Using provided test token.")
 			_ = os.Setenv("KSM_ONE_TIME_TOKEN", "US:3J8QgphqMQjeEr_BHvELdfvbRwPNbqr9FgzSo6SqGaU")
 		}
-		
+
 		if configFile := os.Getenv("KSM_CONFIG_FILE"); configFile == "" {
 			fmt.Println("Warning: KSM_CONFIG_FILE not set. Using provided path.")
 			_ = os.Setenv("KSM_CONFIG_FILE", "/Users/mustinov/Downloads/config.base64")
 		}
 	}
-	
+
 	// Add packages
 	testArgs = append(testArgs, testPackages...)
-	
+
 	// Run tests
 	fmt.Printf("Executing: go %s\n\n", strings.Join(testArgs, " "))
-	
+
 	testExec := exec.Command("go", testArgs...)
 	testExec.Stdout = os.Stdout
 	testExec.Stderr = os.Stderr
 	testExec.Env = os.Environ()
-	
+
 	if err := testExec.Run(); err != nil {
 		return fmt.Errorf("tests failed: %w", err)
 	}
-	
+
 	fmt.Println("\nAll tests passed!")
-	
+
 	// Show coverage report location
 	if !captureData {
 		fmt.Println("\nCoverage report generated. View with:")
 		fmt.Println("  go tool cover -html=coverage.out")
 	}
-	
+
 	// Show captured data location
 	if captureData {
 		fixtureDir := filepath.Join("fixtures", "ksm-capture")
@@ -349,6 +349,6 @@ func runTestSuites(cmd *cobra.Command, args []string) error {
 			})
 		}
 	}
-	
+
 	return nil
 }

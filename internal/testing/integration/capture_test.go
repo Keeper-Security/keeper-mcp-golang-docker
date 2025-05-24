@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	ksm "github.com/keeper-security/secrets-manager-go/core"
 	"github.com/keeper-security/ksm-mcp/internal/testing/capture"
+	ksm "github.com/keeper-security/secrets-manager-go/core"
 )
 
 var (
@@ -87,7 +87,7 @@ func TestCaptureRealData(t *testing.T) {
 func TestGenerateMockData(t *testing.T) {
 	// This test always runs and generates mock data
 	outputDir := filepath.Join("fixtures", "mock-data")
-	
+
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		t.Fatalf("Failed to create output directory: %v", err)
 	}
@@ -168,7 +168,7 @@ func generateLargeConfigFile(size int) []byte {
           "network_in": %d,
           "network_out": %d
         }
-      }`, i, i, 8000+i, (i%4)+1, (i+1)*100, 
+      }`, i, i, 8000+i, (i%4)+1, (i+1)*100,
 			float64(i%100)/100, float64((i+20)%100)/100, float64((i+40)%100)/100,
 			i*1024*1024, i*512*1024)
 	}
@@ -275,22 +275,22 @@ INSERT INTO application_logs (level, message, metadata) VALUES
 func generateBinaryFile(size int) []byte {
 	// Generate pseudo-random binary data
 	data := make([]byte, size)
-	
+
 	// Add some structure to make it interesting
 	// File header
 	copy(data[0:8], []byte("TESTBIN\x00"))
-	
+
 	// Version
 	data[8] = 1
 	data[9] = 0
 	data[10] = 0
 	data[11] = 0
-	
+
 	// Fill with pattern
 	for i := 12; i < size; i++ {
 		data[i] = byte((i * 7) % 256)
 	}
-	
+
 	return data
 }
 

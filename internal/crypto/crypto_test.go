@@ -85,7 +85,7 @@ func TestEncryptDecryptString(t *testing.T) {
 
 func TestDifferentPasswords(t *testing.T) {
 	plaintext := "secret data"
-	
+
 	encryptor1 := NewEncryptor("password1")
 	encryptor2 := NewEncryptor("password2")
 
@@ -198,7 +198,7 @@ func TestInvalidBase64Decoding(t *testing.T) {
 		encoded string
 	}{
 		{"invalid base64", "not-base64!@#"},
-		{"too short", "dGVzdA=="},  // "test" in base64, too short
+		{"too short", "dGVzdA=="}, // "test" in base64, too short
 		{"empty", ""},
 	}
 
@@ -229,7 +229,7 @@ func TestGeneratePassword(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			password, err := GeneratePassword(tt.length)
-			
+
 			if tt.valid {
 				if err != nil {
 					t.Errorf("Expected success, got error: %v", err)
@@ -261,7 +261,7 @@ func TestValidatePassword(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := ValidatePassword(tt.password)
-			
+
 			if tt.valid && err != nil {
 				t.Errorf("Expected valid password, got error: %v", err)
 			}
@@ -317,7 +317,7 @@ func BenchmarkDecrypt(b *testing.B) {
 	password := "benchmark-password"
 	encryptor := NewEncryptor(password)
 	plaintext := []byte("benchmark data for decryption performance test")
-	
+
 	encrypted, err := encryptor.Encrypt(plaintext)
 	if err != nil {
 		b.Fatal(err)

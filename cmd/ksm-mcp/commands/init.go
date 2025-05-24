@@ -108,7 +108,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("failed to read password: %w", err)
 		}
-		
+
 		store, err = storage.NewProfileStoreWithPassword(configDir, password)
 		if err != nil {
 			return fmt.Errorf("failed to create profile store: %w", err)
@@ -120,7 +120,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 			fmt.Println("⚠️  WARNING: Creating profile WITHOUT master password protection.")
 			fmt.Println("Your KSM credentials will be stored in plain text.")
 			fmt.Println("This is NOT RECOMMENDED for production use.")
-			
+
 			store = storage.NewProfileStore(configDir)
 		} else {
 			// Prompt for master password
@@ -163,7 +163,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Initializing profile '%s'...\n", initProfile)
 
 	var ksmConfig map[string]string
-	
+
 	if initToken != "" {
 		// Validate token
 		if err := validator.ValidateToken(initToken); err != nil {
@@ -181,7 +181,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		// Determine if config is a file path or base64
 		var configData []byte
 		var err error
-		
+
 		// Check if it's a file path (contains / or \ or starts with ~ or .)
 		if strings.ContainsAny(initConfig, "/\\") || strings.HasPrefix(initConfig, "~") || strings.HasPrefix(initConfig, ".") {
 			// Load from file
@@ -194,7 +194,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 				}
 				configPath = filepath.Join(home, configPath[1:])
 			}
-			
+
 			// Clean and validate the path
 			cleanPath := filepath.Clean(configPath)
 			configData, err = os.ReadFile(cleanPath) // #nosec G304 - user-provided path for config

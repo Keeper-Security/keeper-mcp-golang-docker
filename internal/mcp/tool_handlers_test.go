@@ -179,12 +179,12 @@ func TestExecuteCreateSecret(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockClient := new(mockKSMClient)
 			mockConfirmer := new(mockConfirmer)
-			
+
 			// Create a test logger
 			logger, _ := audit.NewLogger(audit.Config{
 				FilePath: "/tmp/test-audit.log",
 			})
-			
+
 			server := &Server{
 				confirmer: mockConfirmer,
 				logger:    logger,

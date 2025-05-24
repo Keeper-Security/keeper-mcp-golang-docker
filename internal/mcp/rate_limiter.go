@@ -7,10 +7,10 @@ import (
 
 // RateLimiter implements a simple token bucket rate limiter
 type RateLimiter struct {
-	rate       int           // requests per minute
-	tokens     int           // current tokens
-	maxTokens  int           // max tokens (burst)
-	lastUpdate time.Time     // last token update
+	rate       int       // requests per minute
+	tokens     int       // current tokens
+	maxTokens  int       // max tokens (burst)
+	lastUpdate time.Time // last token update
 	mu         sync.Mutex
 }
 
@@ -33,7 +33,7 @@ func (r *RateLimiter) Allow(method string) bool {
 	now := time.Now()
 	elapsed := now.Sub(r.lastUpdate)
 	tokensToAdd := int(elapsed.Minutes() * float64(r.rate))
-	
+
 	if tokensToAdd > 0 {
 		r.tokens = min(r.tokens+tokensToAdd, r.maxTokens)
 		r.lastUpdate = now

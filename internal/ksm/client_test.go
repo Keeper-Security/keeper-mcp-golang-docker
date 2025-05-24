@@ -10,9 +10,9 @@ import (
 
 // Mock types for testing
 type mockSecretsManager struct {
-	records      map[string]*mockRecord
-	shouldFail   bool
-	failMessage  string
+	records     map[string]*mockRecord
+	shouldFail  bool
+	failMessage string
 }
 
 type mockRecord struct {
@@ -26,13 +26,13 @@ type mockRecord struct {
 	folder   string
 }
 
-func (m *mockRecord) UID() string      { return m.uid }
-func (m *mockRecord) Title() string    { return m.title }
-func (m *mockRecord) Type() string     { return m.recType }
-func (m *mockRecord) Login() string    { return m.login }
-func (m *mockRecord) Password() string { return m.password }
-func (m *mockRecord) URL() string      { return m.url }
-func (m *mockRecord) Notes() string    { return m.notes }
+func (m *mockRecord) UID() string       { return m.uid }
+func (m *mockRecord) Title() string     { return m.title }
+func (m *mockRecord) Type() string      { return m.recType }
+func (m *mockRecord) Login() string     { return m.login }
+func (m *mockRecord) Password() string  { return m.password }
+func (m *mockRecord) URL() string       { return m.url }
+func (m *mockRecord) Notes() string     { return m.notes }
 func (m *mockRecord) FolderUID() string { return m.folder }
 
 func TestMaskValue(t *testing.T) {
@@ -71,7 +71,7 @@ func TestIsSensitiveField(t *testing.T) {
 		{"card number", "cardNumber", true},
 		{"pin", "pin", true},
 		{"passphrase", "passphrase", true},
-		
+
 		{"username", "username", false},
 		{"email", "email", false},
 		{"title", "title", false},
@@ -107,7 +107,7 @@ func TestInitializeWithToken(t *testing.T) {
 			// Note: This test will fail without a real KSM backend
 			// In production, we'd use a mock or test server
 			config, err := InitializeWithToken(tt.token)
-			
+
 			if tt.wantErr {
 				if err == nil {
 					t.Error("Expected error but got none")
@@ -116,7 +116,7 @@ func TestInitializeWithToken(t *testing.T) {
 				// Skip success case as it requires real KSM
 				t.Skip("Requires real KSM connection")
 			}
-			
+
 			_ = config // Suppress unused variable warning
 		})
 	}
@@ -153,7 +153,7 @@ func TestInitializeWithConfig(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			config, err := InitializeWithConfig([]byte(tt.configJSON))
-			
+
 			if tt.wantErr {
 				if err == nil {
 					t.Error("Expected error but got none")
@@ -232,7 +232,7 @@ func TestNewClient(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			client, err := NewClient(tt.profile, logger)
-			
+
 			if tt.wantErr {
 				if err == nil {
 					t.Error("Expected error but got none")

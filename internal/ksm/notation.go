@@ -164,8 +164,8 @@ func isValidUID(s string) bool {
 	}
 	// UIDs typically contain alphanumeric, underscore, and hyphen
 	for _, r := range s {
-		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || 
-			  (r >= '0' && r <= '9') || r == '_' || r == '-') {
+		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') ||
+			(r >= '0' && r <= '9') || r == '_' || r == '-') {
 			return false
 		}
 	}

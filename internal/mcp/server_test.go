@@ -28,7 +28,7 @@ func testLogger(t *testing.T) *audit.Logger {
 func TestServer_NewServer(t *testing.T) {
 	storage := &storage.ProfileStore{}
 	logger := testLogger(t)
-	
+
 	tests := []struct {
 		name    string
 		options *ServerOptions
@@ -249,7 +249,7 @@ func TestServer_GetAvailableTools(t *testing.T) {
 	server := NewServer(storage, logger, nil)
 
 	tools := server.getAvailableTools()
-	
+
 	// Check we have all expected tools
 	expectedTools := []string{
 		"list_secrets",

@@ -19,20 +19,20 @@ import (
 
 // Server implements the MCP protocol server
 type Server struct {
-	storage     *storage.ProfileStore
-	profiles    map[string]KSMClient
+	storage        *storage.ProfileStore
+	profiles       map[string]KSMClient
 	currentProfile string
-	logger      *audit.Logger
-	confirmer   ConfirmerInterface
-	options     *ServerOptions
-	mu          sync.RWMutex
-	
+	logger         *audit.Logger
+	confirmer      ConfirmerInterface
+	options        *ServerOptions
+	mu             sync.RWMutex
+
 	// Rate limiting
 	rateLimiter *RateLimiter
-	
+
 	// Session management
-	sessionID   string
-	startTime   time.Time
+	sessionID string
+	startTime time.Time
 }
 
 // ServerOptions configuration for the server

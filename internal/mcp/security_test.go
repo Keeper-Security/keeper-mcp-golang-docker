@@ -16,7 +16,7 @@ import (
 func TestServer_SecurityValidation(t *testing.T) {
 	storage := &storage.ProfileStore{}
 	logger := testLogger(t)
-	
+
 	// Create server with strict settings
 	server := NewServer(storage, logger, &ServerOptions{
 		BatchMode:   false,
@@ -177,7 +177,7 @@ func TestServer_SecurityValidation(t *testing.T) {
 func TestServer_RateLimitingSecurity(t *testing.T) {
 	storage := &storage.ProfileStore{}
 	logger := testLogger(t)
-	
+
 	// Create server with very low rate limit
 	server := NewServer(storage, logger, &ServerOptions{
 		RateLimit: 5, // 5 requests per minute
@@ -190,28 +190,28 @@ func TestServer_RateLimitingSecurity(t *testing.T) {
 	}
 
 	reqData, _ := json.Marshal(request)
-	
+
 	// Send requests up to the limit
 	successCount := 0
 	rateLimitCount := 0
-	
+
 	for i := 0; i < 10; i++ {
 		var buf bytes.Buffer
 		writer := bufio.NewWriter(&buf)
-		
+
 		err := server.processMessage(reqData, writer)
 		writer.Flush()
-		
+
 		var response types.MCPResponse
 		json.Unmarshal(buf.Bytes(), &response)
-		
+
 		if response.Error != nil && response.Error.Code == -32029 {
 			rateLimitCount++
 		} else if err == nil {
 			successCount++
 		}
 	}
-	
+
 	// Should have some successful and some rate limited
 	if successCount == 0 {
 		t.Error("expected some successful requests")
@@ -220,7 +220,7 @@ func TestServer_RateLimitingSecurity(t *testing.T) {
 		t.Error("expected some rate limited requests")
 	}
 	if successCount+rateLimitCount != 10 {
-		t.Errorf("expected 10 total requests, got %d successful + %d rate limited", 
+		t.Errorf("expected 10 total requests, got %d successful + %d rate limited",
 			successCount, rateLimitCount)
 	}
 }
@@ -270,7 +270,7 @@ func TestServer_NoActiveSessionSecurity(t *testing.T) {
 func TestServer_SensitiveDataMasking(t *testing.T) {
 	// This would require a mock KSM client to test properly
 	// For now, we'll test the masking logic in isolation
-	
+
 	testCases := []struct {
 		name     string
 		value    string
@@ -299,7 +299,7 @@ func TestServer_SensitiveDataMasking(t *testing.T) {
 			if masked != tc.expected {
 				t.Errorf("expected %s, got %s", tc.expected, masked)
 			}
-			
+
 			// Ensure original value is not in masked output
 			if len(tc.value) > 6 && strings.Contains(masked, tc.value[3:len(tc.value)-3]) {
 				t.Error("masked value contains too much of the original")
@@ -358,11 +358,11 @@ func TestServer_ConcurrentRequestSecurity(t *testing.T) {
 
 	// Launch multiple concurrent requests
 	done := make(chan bool, 10)
-	
+
 	for i := 0; i < 10; i++ {
 		go func(id int) {
 			defer func() { done <- true }()
-			
+
 			request := types.MCPRequest{
 				JSONRPC: "2.0",
 				ID:      id,
@@ -378,7 +378,7 @@ func TestServer_ConcurrentRequestSecurity(t *testing.T) {
 
 			var response types.MCPResponse
 			json.Unmarshal(buf.Bytes(), &response)
-			
+
 			// Verify response has correct ID
 			if respID, ok := response.ID.(float64); !ok || int(respID) != id {
 				t.Errorf("response ID mismatch: expected %d, got %v", id, response.ID)

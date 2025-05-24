@@ -27,14 +27,14 @@ func NewMemoryProfileStore() *MemoryProfileStore {
 func (m *MemoryProfileStore) AddProfile(name string, client interface{}) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	profile := &types.Profile{
 		Name:      name,
 		Config:    make(map[string]string),
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
-	
+
 	m.profiles[name] = profile
 	m.clients[name] = client
 }
@@ -43,12 +43,12 @@ func (m *MemoryProfileStore) AddProfile(name string, client interface{}) {
 func (m *MemoryProfileStore) GetProfile(name string) (*types.Profile, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	
+
 	profile, exists := m.profiles[name]
 	if !exists {
 		return nil, fmt.Errorf("profile '%s' not found", name)
 	}
-	
+
 	return profile, nil
 }
 
@@ -56,7 +56,7 @@ func (m *MemoryProfileStore) GetProfile(name string) (*types.Profile, error) {
 func (m *MemoryProfileStore) ListProfiles() ([]string, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	
+
 	names := make([]string, 0, len(m.profiles))
 	for name := range m.profiles {
 		names = append(names, name)
@@ -68,7 +68,7 @@ func (m *MemoryProfileStore) ListProfiles() ([]string, error) {
 func (m *MemoryProfileStore) SaveProfile(profile *types.Profile) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	m.profiles[profile.Name] = profile
 	return nil
 }
@@ -77,7 +77,7 @@ func (m *MemoryProfileStore) SaveProfile(profile *types.Profile) error {
 func (m *MemoryProfileStore) DeleteProfile(name string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	delete(m.profiles, name)
 	return nil
 }
@@ -106,11 +106,11 @@ func (m *MemoryProfileStore) Lock() error {
 func (m *MemoryProfileStore) GetClient(name string) (interface{}, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	
+
 	client, exists := m.profiles[name]
 	if !exists {
 		return nil, fmt.Errorf("profile '%s' not found", name)
 	}
-	
+
 	return client, nil
 }

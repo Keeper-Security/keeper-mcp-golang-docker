@@ -366,9 +366,9 @@ func (s *Server) executeUploadFile(client KSMClient, args json.RawMessage) (inte
 	}
 
 	return map[string]interface{}{
-		"uid":      params.UID,
-		"file":     params.Title,
-		"message":  "File uploaded successfully",
+		"uid":     params.UID,
+		"file":    params.Title,
+		"message": "File uploaded successfully",
 	}, nil
 }
 

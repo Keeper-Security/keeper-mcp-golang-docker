@@ -13,7 +13,7 @@ const Version = "v1.0.0"
 func main() {
 	// Set version for commands
 	commands.SetVersion(Version)
-	
+
 	if err := commands.Execute(); err != nil {
 		os.Exit(1)
 	}

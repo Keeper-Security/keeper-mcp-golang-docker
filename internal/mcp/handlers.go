@@ -75,7 +75,7 @@ func (s *Server) handleInitialized(request types.MCPRequest, writer *bufio.Write
 // handleToolsList handles the tools/list request
 func (s *Server) handleToolsList(request types.MCPRequest, writer *bufio.Writer) error {
 	tools := s.getAvailableTools()
-	
+
 	response := map[string]interface{}{
 		"tools": tools,
 	}
@@ -123,21 +123,21 @@ func (s *Server) handleSessionsList(request types.MCPRequest, writer *bufio.Writ
 	for _, name := range profileNames {
 		// Check if this profile is loaded
 		_, isLoaded := s.profiles[name]
-		
+
 		// Get profile details
 		profile, _ := s.storage.GetProfile(name)
-		
+
 		session := map[string]interface{}{
 			"id":        name,
 			"name":      name,
 			"is_active": name == s.currentProfile,
 			"is_loaded": isLoaded,
 		}
-		
+
 		if profile != nil {
 			session["created_at"] = profile.CreatedAt
 		}
-		
+
 		sessions = append(sessions, session)
 	}
 

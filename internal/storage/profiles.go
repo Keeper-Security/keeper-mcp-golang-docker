@@ -36,9 +36,9 @@ type EncryptedProfile struct {
 
 // ProfilesDatabase represents the on-disk storage format
 type ProfilesDatabase struct {
-	Version   int                         `json:"version"`
+	Version   int                          `json:"version"`
 	Profiles  map[string]*EncryptedProfile `json:"profiles"`
-	UpdatedAt time.Time                   `json:"updated_at"`
+	UpdatedAt time.Time                    `json:"updated_at"`
 }
 
 // NewProfileStore creates a new profile store
@@ -72,7 +72,7 @@ func NewProfileStoreWithPassword(configDir string, password string) (*ProfileSto
 // initializeMasterKey initializes or loads the master encryption key
 func (ps *ProfileStore) initializeMasterKey() error {
 	keyPath := filepath.Join(ps.configDir, MasterKeyFileName)
-	
+
 	// Check if master key exists
 	if _, err := os.Stat(keyPath); os.IsNotExist(err) {
 		// Generate new master key
@@ -381,7 +381,7 @@ func (ps *ProfileStore) GetPasswordHash() string {
 	if ps.encryptor == nil {
 		return ""
 	}
-	
+
 	// Generate a hash of the password for storage
 	// This is used to verify the password on subsequent runs
 	// We'll use a simple approach here - in production you'd use bcrypt or similar
@@ -390,7 +390,7 @@ func (ps *ProfileStore) GetPasswordHash() string {
 	if err != nil {
 		return ""
 	}
-	
+
 	// Return first 64 chars as a fingerprint
 	if len(encrypted) > 64 {
 		return encrypted[:64]

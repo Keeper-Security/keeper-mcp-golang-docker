@@ -2,7 +2,6 @@ package storage
 
 import (
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 )
@@ -59,8 +58,8 @@ func TestNewProfileStoreWithPassword(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tempDir := t.TempDir()
-		store, err := NewProfileStoreWithPassword(tempDir, tt.password)
-			
+			store, err := NewProfileStoreWithPassword(tempDir, tt.password)
+
 			if tt.wantErr {
 				if err == nil {
 					t.Error("Expected error for invalid password")
@@ -437,7 +436,7 @@ func TestValidateKSMConfig(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := store.validateKSMConfig(tt.config)
-			
+
 			if tt.wantErr && err == nil {
 				t.Error("Expected validation to fail")
 			}
@@ -494,7 +493,7 @@ func setupTestStore(t *testing.T) *ProfileStore {
 	tempDir := t.TempDir()
 	originalConfigDir := os.Getenv("KSM_MCP_CONFIG_DIR")
 	os.Setenv("KSM_MCP_CONFIG_DIR", tempDir)
-	
+
 	t.Cleanup(func() {
 		if originalConfigDir != "" {
 			os.Setenv("KSM_MCP_CONFIG_DIR", originalConfigDir)

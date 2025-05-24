@@ -10,7 +10,7 @@ func TestNewValidator(t *testing.T) {
 	if v == nil {
 		t.Fatal("NewValidator returned nil")
 	}
-	
+
 	// Verify patterns are initialized
 	if v.uidPattern == nil {
 		t.Error("UID pattern not initialized")
@@ -28,7 +28,7 @@ func TestNewValidator(t *testing.T) {
 
 func TestValidateUID(t *testing.T) {
 	v := NewValidator()
-	
+
 	tests := []struct {
 		name    string
 		uid     string
@@ -39,7 +39,7 @@ func TestValidateUID(t *testing.T) {
 		{"valid uid 32 chars", "12345678901234567890123456789012", false},
 		{"valid with underscore", "NJ_xXSkk3xYI1h9ql5lAiQ", false},
 		{"valid with hyphen", "abc-def-123-456-789", false},
-		
+
 		// Invalid UIDs
 		{"empty", "", true},
 		{"too short", "123456789012345", true},
@@ -52,7 +52,7 @@ func TestValidateUID(t *testing.T) {
 		{"with newline", "valid123456789012\n", true},
 		{"with null byte", "valid123456789012\x00", true},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := v.ValidateUID(tt.uid)
@@ -65,7 +65,7 @@ func TestValidateUID(t *testing.T) {
 
 func TestValidateToken(t *testing.T) {
 	v := NewValidator()
-	
+
 	tests := []struct {
 		name    string
 		token   string
@@ -79,7 +79,7 @@ func TestValidateToken(t *testing.T) {
 		{"valid CA token", "CA:abcdef123456789012345678901234567890", false},
 		{"valid GOV token", "GOV:abcdef123456789012345678901234567890", false},
 		{"token with special base64", "US:abc+def/123=456_789-012", false},
-		
+
 		// Invalid tokens
 		{"empty", "", true},
 		{"no region", "abcdef123456789012345678901234567890", true},
@@ -89,7 +89,7 @@ func TestValidateToken(t *testing.T) {
 		{"with spaces", "US:abc def 123", true},
 		{"lowercase region", "us:abcdef123456789012345678901234567890", true},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := v.ValidateToken(tt.token)
@@ -102,7 +102,7 @@ func TestValidateToken(t *testing.T) {
 
 func TestValidateProfileName(t *testing.T) {
 	v := NewValidator()
-	
+
 	tests := []struct {
 		name        string
 		profileName string
@@ -115,7 +115,7 @@ func TestValidateProfileName(t *testing.T) {
 		{"with hyphen", "my-profile", false},
 		{"with dot", "my.profile", false},
 		{"mixed", "My-Profile_123.test", false},
-		
+
 		// Invalid names
 		{"empty", "", true},
 		{"too long", strings.Repeat("a", 65), true},
@@ -129,7 +129,7 @@ func TestValidateProfileName(t *testing.T) {
 		{"with slash", "my/profile", true},
 		{"with backslash", "my\\profile", true},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := v.ValidateProfileName(tt.profileName)
@@ -142,7 +142,7 @@ func TestValidateProfileName(t *testing.T) {
 
 func TestValidateFilePath(t *testing.T) {
 	v := NewValidator()
-	
+
 	tests := []struct {
 		name    string
 		path    string
@@ -153,10 +153,10 @@ func TestValidateFilePath(t *testing.T) {
 		{"relative path", "folder/file.txt", false},
 		{"nested path", "folder/subfolder/file.txt", false},
 		{"with dot", "./file.txt", false},
-		{"absolute unix", "/etc/passwd", false}, // Absolute paths are allowed
+		{"absolute unix", "/etc/passwd", false},              // Absolute paths are allowed
 		{"absolute windows", "C:\\Windows\\System32", false}, // Absolute paths are allowed
-		{"UNC path", "\\\\server\\share", false}, // UNC paths are allowed
-		
+		{"UNC path", "\\\\server\\share", false},             // UNC paths are allowed
+
 		// Invalid paths
 		{"empty", "", true},
 		{"parent traversal", "../file.txt", true},
@@ -164,11 +164,11 @@ func TestValidateFilePath(t *testing.T) {
 		{"url encoded traversal", "%2e%2e/file.txt", true},
 		{"null byte", "file.txt\x00", true},
 		{"with semicolon", "file.txt;rm -rf /", true},
-		
+
 		// Note: Absolute paths are not rejected by ValidateFilePath
 		// They should be validated separately based on context
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := v.ValidateFilePath(tt.path)
@@ -181,7 +181,7 @@ func TestValidateFilePath(t *testing.T) {
 
 func TestValidateKSMNotation(t *testing.T) {
 	v := NewValidator()
-	
+
 	tests := []struct {
 		name     string
 		notation string
@@ -194,7 +194,7 @@ func TestValidateKSMNotation(t *testing.T) {
 		{"nested array", "UID123/custom_field/phone[0][number]", false},
 		{"file notation", "UID123/file/document.pdf", false},
 		{"title search", "MyTitle/field/password", false},
-		
+
 		// Invalid notations
 		{"empty", "", true},
 		{"no slash", "UID123", true},
@@ -203,7 +203,7 @@ func TestValidateKSMNotation(t *testing.T) {
 		{"backtick injection", "UID123/field/`password`", true},
 		{"newline injection", "UID123/field/password\n", true},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := v.ValidateKSMNotation(tt.notation)
@@ -216,7 +216,7 @@ func TestValidateKSMNotation(t *testing.T) {
 
 func TestValidateSearchQuery(t *testing.T) {
 	v := NewValidator()
-	
+
 	tests := []struct {
 		name    string
 		query   string
@@ -227,7 +227,7 @@ func TestValidateSearchQuery(t *testing.T) {
 		{"with spaces", "my password", false},
 		{"with numbers", "password123", false},
 		{"with special", "user@example.com", false},
-		
+
 		// Invalid queries
 		{"empty", "", true},
 		{"too long", strings.Repeat("a", 257), true},
@@ -237,7 +237,7 @@ func TestValidateSearchQuery(t *testing.T) {
 		{"pipe injection", "password|grep", true},
 		{"null byte", "password\x00", true},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := v.ValidateSearchQuery(tt.query)
@@ -250,7 +250,7 @@ func TestValidateSearchQuery(t *testing.T) {
 
 func TestSanitizeString(t *testing.T) {
 	v := NewValidator()
-	
+
 	tests := []struct {
 		name     string
 		input    string
@@ -263,7 +263,7 @@ func TestSanitizeString(t *testing.T) {
 		{"unicode", "hello 世界", "hello 世界"},
 		{"emoji", "hello 😀", "hello 😀"},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := v.SanitizeString(tt.input)
@@ -276,7 +276,7 @@ func TestSanitizeString(t *testing.T) {
 
 func TestSanitizeForShell(t *testing.T) {
 	v := NewValidator()
-	
+
 	tests := []struct {
 		name     string
 		input    string
@@ -290,7 +290,7 @@ func TestSanitizeForShell(t *testing.T) {
 		{"with newline", "hello\nworld", "hello\\nworld"},
 		{"multiple escapes", `$("test")`, `\$(\"test\")`},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := v.SanitizeForShell(tt.input)
@@ -303,7 +303,7 @@ func TestSanitizeForShell(t *testing.T) {
 
 func TestValidateMapKeys(t *testing.T) {
 	v := NewValidator()
-	
+
 	tests := []struct {
 		name    string
 		data    map[string]interface{}
@@ -332,7 +332,7 @@ func TestValidateMapKeys(t *testing.T) {
 			true,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := v.ValidateMapKeys(tt.data)
@@ -345,7 +345,7 @@ func TestValidateMapKeys(t *testing.T) {
 
 func TestValidateJSONField(t *testing.T) {
 	v := NewValidator()
-	
+
 	tests := []struct {
 		name    string
 		field   string
@@ -354,14 +354,14 @@ func TestValidateJSONField(t *testing.T) {
 		{"simple field", "password", false},
 		{"with underscore", "user_name", false},
 		{"with number", "field123", false},
-		
+
 		{"empty", "", true},
 		{"with dot", "user.name", true},
 		{"with bracket", "user[0]", true},
 		{"with quote", `user"name`, true},
 		{"with single quote", "user'name", true},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := v.ValidateJSONField(tt.field)
@@ -374,7 +374,7 @@ func TestValidateJSONField(t *testing.T) {
 
 func TestIsAlphanumeric(t *testing.T) {
 	v := NewValidator()
-	
+
 	tests := []struct {
 		name     string
 		input    string
@@ -384,13 +384,13 @@ func TestIsAlphanumeric(t *testing.T) {
 		{"numbers", "123456", true},
 		{"mixed", "abc123XYZ", true},
 		{"empty", "", true}, // Empty is considered alphanumeric
-		
+
 		{"with space", "abc 123", false},
 		{"with underscore", "abc_123", false},
 		{"with hyphen", "abc-123", false},
 		{"with special", "abc@123", false},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := v.IsAlphanumeric(tt.input)
@@ -403,7 +403,7 @@ func TestIsAlphanumeric(t *testing.T) {
 
 func TestValidatePasswordStrength(t *testing.T) {
 	v := NewValidator()
-	
+
 	tests := []struct {
 		name     string
 		password string
@@ -411,7 +411,7 @@ func TestValidatePasswordStrength(t *testing.T) {
 	}{
 		{"strong password", "MyStr0ng!Pass123", false},
 		{"all requirements", "Abc123!@#def", false},
-		
+
 		{"too short", "Abc123!", true},
 		{"no uppercase", "abc123!@#def", true},
 		{"no lowercase", "ABC123!@#DEF", true},
@@ -419,7 +419,7 @@ func TestValidatePasswordStrength(t *testing.T) {
 		{"no special", "AbcDef123ghi", true},
 		{"empty", "", true},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := v.ValidatePasswordStrength(tt.password)
@@ -432,7 +432,7 @@ func TestValidatePasswordStrength(t *testing.T) {
 
 func TestTruncateString(t *testing.T) {
 	v := NewValidator()
-	
+
 	tests := []struct {
 		name     string
 		input    string
@@ -446,7 +446,7 @@ func TestTruncateString(t *testing.T) {
 		{"empty", "", 5, ""},
 		{"very short max", "hello", 3, "..."},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := v.TruncateString(tt.input, tt.maxLen)
@@ -459,7 +459,7 @@ func TestTruncateString(t *testing.T) {
 
 func TestCommandInjectionPatterns(t *testing.T) {
 	v := NewValidator()
-	
+
 	// Test that all dangerous patterns are caught
 	dangerousInputs := []string{
 		"test;rm -rf /",
@@ -476,7 +476,7 @@ func TestCommandInjectionPatterns(t *testing.T) {
 		"test|grep password",
 		"test\x00",
 	}
-	
+
 	for _, input := range dangerousInputs {
 		t.Run(input, func(t *testing.T) {
 			if !v.containsCommandInjection(input) {
@@ -488,7 +488,7 @@ func TestCommandInjectionPatterns(t *testing.T) {
 
 func TestPathTraversalPatterns(t *testing.T) {
 	v := NewValidator()
-	
+
 	// Test that path traversal patterns are caught
 	traversalInputs := []string{
 		"../etc/passwd",
@@ -497,7 +497,7 @@ func TestPathTraversalPatterns(t *testing.T) {
 		"%252e%252e/etc/passwd",
 		"file\x00.txt",
 	}
-	
+
 	for _, input := range traversalInputs {
 		t.Run(input, func(t *testing.T) {
 			if !v.containsPathTraversal(input) {
@@ -505,7 +505,7 @@ func TestPathTraversalPatterns(t *testing.T) {
 			}
 		})
 	}
-	
+
 	// Test that absolute paths are NOT detected as traversal
 	// (they should be validated separately if needed)
 	absolutePaths := []string{
@@ -513,7 +513,7 @@ func TestPathTraversalPatterns(t *testing.T) {
 		"C:\\Windows\\System32",
 		"\\\\server\\share",
 	}
-	
+
 	for _, input := range absolutePaths {
 		t.Run(input, func(t *testing.T) {
 			if v.containsPathTraversal(input) {

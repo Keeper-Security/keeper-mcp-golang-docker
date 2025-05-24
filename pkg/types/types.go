@@ -45,8 +45,8 @@ type GetFieldParams struct {
 
 // GeneratePasswordParams parameters for password generation
 type GeneratePasswordParams struct {
-	Length       int    `json:"length,omitempty"`        // Default: 32
-	Lowercase    int    `json:"lowercase,omitempty"`   
+	Length       int    `json:"length,omitempty"` // Default: 32
+	Lowercase    int    `json:"lowercase,omitempty"`
 	Uppercase    int    `json:"uppercase,omitempty"`
 	Digits       int    `json:"digits,omitempty"`
 	Special      int    `json:"special,omitempty"`
@@ -103,8 +103,8 @@ type UploadFileParams struct {
 
 // DownloadFileParams parameters for downloading a file
 type DownloadFileParams struct {
-	UID      string `json:"uid"`       // Record UID
-	FileUID  string `json:"file_uid"`  // File UID or name
+	UID      string `json:"uid"`      // Record UID
+	FileUID  string `json:"file_uid"` // File UID or name
 	SavePath string `json:"save_path,omitempty"`
 }
 

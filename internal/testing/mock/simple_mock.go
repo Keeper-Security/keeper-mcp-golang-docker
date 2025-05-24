@@ -39,11 +39,11 @@ type Folder struct {
 
 // CapturedCall records API calls for testing
 type CapturedCall struct {
-	Method    string      `json:"method"`
+	Method    string        `json:"method"`
 	Args      []interface{} `json:"args"`
-	Response  interface{} `json:"response"`
-	Error     error      `json:"error,omitempty"`
-	Timestamp time.Time  `json:"timestamp"`
+	Response  interface{}   `json:"response"`
+	Error     error         `json:"error,omitempty"`
+	Timestamp time.Time     `json:"timestamp"`
 }
 
 // SimpleMockServer provides a simple mock KSM server for testing
@@ -277,9 +277,9 @@ func (s *SimpleMockServer) loadTestData() {
 		Type:      "sslCertificate",
 		FolderUID: "prod-folder",
 		Fields: map[string]interface{}{
-			"text":        "*.example.com",
-			"multiline":   "-----BEGIN CERTIFICATE-----\nMIIDXTCCAkWgAwIBAgIJAKl...(mock cert)...",
-			"privateKey":  "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0B...(mock key)...",
+			"text":       "*.example.com",
+			"multiline":  "-----BEGIN CERTIFICATE-----\nMIIDXTCCAkWgAwIBAgIJAKl...(mock cert)...",
+			"privateKey": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0B...(mock key)...",
 		},
 		Custom: map[string]interface{}{
 			"Valid From":  "2024-01-01",
@@ -297,7 +297,7 @@ func (s *SimpleMockServer) GetRecords(uids []string) ([]*SimpleRecord, error) {
 	defer s.mu.RUnlock()
 
 	var result []*SimpleRecord
-	
+
 	if len(uids) == 0 {
 		// Return all records
 		for _, record := range s.records {
@@ -412,26 +412,26 @@ func (s *SimpleMockServer) SearchRecords(searchTerm string) ([]*SimpleRecord, er
 	defer s.mu.RUnlock()
 
 	var results []*SimpleRecord
-	
+
 	for _, record := range s.records {
 		// Search in title
 		if containsIgnoreCase(record.Title, searchTerm) {
 			results = append(results, record)
 			continue
 		}
-		
+
 		// Search in notes
 		if containsIgnoreCase(record.Notes, searchTerm) {
 			results = append(results, record)
 			continue
 		}
-		
+
 		// Search in field values
 		if searchInMap(record.Fields, searchTerm) || searchInMap(record.Custom, searchTerm) {
 			results = append(results, record)
 		}
 	}
-	
+
 	return results, nil
 }
 

@@ -27,11 +27,11 @@ type CaptureEntry struct {
 }
 
 type CapturedData struct {
-	CaptureTime time.Time       `json:"capture_time"`
-	Records     []*ksm.Record   `json:"records"`
-	Folders     []FolderInfo    `json:"folders"`
-	Files       []FileInfo      `json:"files"`
-	Calls       []CaptureEntry  `json:"api_calls"`
+	CaptureTime time.Time      `json:"capture_time"`
+	Records     []*ksm.Record  `json:"records"`
+	Folders     []FolderInfo   `json:"folders"`
+	Files       []FileInfo     `json:"files"`
+	Calls       []CaptureEntry `json:"api_calls"`
 }
 
 type FolderInfo struct {
@@ -62,17 +62,17 @@ func (dc *DataCapture) RecordCall(method string, request interface{}, response i
 		Response:  response,
 		Timestamp: time.Now(),
 	}
-	
+
 	if err != nil {
 		entry.Error = err.Error()
 	}
-	
+
 	dc.captures = append(dc.captures, entry)
 }
 
 func (dc *DataCapture) CaptureVault(client *ksm.SecretsManager) error {
 	fmt.Println("Starting vault data capture...")
-	
+
 	// Create output directory
 	if err := os.MkdirAll(dc.outputDir, 0750); err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
@@ -85,7 +85,7 @@ func (dc *DataCapture) CaptureVault(client *ksm.SecretsManager) error {
 	if err != nil {
 		return fmt.Errorf("failed to get secrets: %w", err)
 	}
-	
+
 	fmt.Printf("Found %d records\n", len(records))
 
 	// Prepare captured data
@@ -103,7 +103,7 @@ func (dc *DataCapture) CaptureVault(client *ksm.SecretsManager) error {
 		folderUid := record.FolderUid()
 		if folderUid != "" && !folderMap[folderUid] {
 			folderMap[folderUid] = true
-			
+
 			// In real implementation, we'd fetch folder details
 			// For now, we'll create mock folder info
 			folderName := "Unknown"
@@ -115,7 +115,7 @@ func (dc *DataCapture) CaptureVault(client *ksm.SecretsManager) error {
 			case "test-folder":
 				folderName = "Testing"
 			}
-			
+
 			captured.Folders = append(captured.Folders, FolderInfo{
 				UID:    folderUid,
 				Name:   folderName,
@@ -126,15 +126,15 @@ func (dc *DataCapture) CaptureVault(client *ksm.SecretsManager) error {
 		// Download and save files
 		if len(record.Files) > 0 {
 			fmt.Printf("Processing %d files for record '%s'\n", len(record.Files), record.Title())
-			
+
 			for _, file := range record.Files {
 				fmt.Printf("  - Downloading file: %s\n", file.Name)
-				
+
 				// Download file data
 				// TODO: Fix SDK method for downloading files
 				// fileData, err := client.DownloadFileData(file)
 				// dc.RecordCall("DownloadFileData", file.Name, len(fileData), err)
-				
+
 				// if err != nil {
 				// 	fmt.Printf("    Error downloading file: %v\n", err)
 				// 	continue
@@ -145,7 +145,7 @@ func (dc *DataCapture) CaptureVault(client *ksm.SecretsManager) error {
 				fileName := fmt.Sprintf("%s_%s_%s", record.Uid, file.Name, file.Title)
 				fileName = sanitizeFileName(fileName)
 				filePath := filepath.Join(dc.outputDir, "files", fileName)
-				
+
 				if err := os.MkdirAll(filepath.Dir(filePath), 0750); err != nil {
 					fmt.Printf("    Error creating file directory: %v\n", err)
 					continue
@@ -163,7 +163,7 @@ func (dc *DataCapture) CaptureVault(client *ksm.SecretsManager) error {
 					FileSize:  int64(file.Size),
 					FilePath:  filePath,
 				})
-				
+
 				fmt.Printf("    Saved to: %s (%d bytes)\n", filePath, len(fileData))
 			}
 		}
@@ -186,7 +186,7 @@ func (dc *DataCapture) CaptureVault(client *ksm.SecretsManager) error {
 	fmt.Printf("- Files downloaded: %d\n", len(captured.Files))
 	fmt.Printf("- API calls recorded: %d\n", len(dc.captures))
 	fmt.Printf("- Fixture file: %s\n", fixtureFile)
-	
+
 	// Generate summary report
 	summaryFile := filepath.Join(dc.outputDir, "capture_summary.txt")
 	summary := fmt.Sprintf(`KSM Vault Data Capture Summary
@@ -204,7 +204,7 @@ Records by Type:
 	for _, record := range records {
 		typeCount[record.Type()]++
 	}
-	
+
 	for recordType, count := range typeCount {
 		summary += fmt.Sprintf("- %s: %d\n", recordType, count)
 	}
@@ -230,7 +230,7 @@ func sanitizeFileName(name string) string {
 		'|':  '_',
 		' ':  '_',
 	}
-	
+
 	result := ""
 	for _, char := range name {
 		if replacement, ok := replacer[char]; ok {
@@ -239,7 +239,7 @@ func sanitizeFileName(name string) string {
 			result += string(char)
 		}
 	}
-	
+
 	return result
 }
 

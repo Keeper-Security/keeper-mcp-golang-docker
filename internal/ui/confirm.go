@@ -65,13 +65,13 @@ func (c *Confirmer) ConfirmSensitiveOperation(ctx context.Context, operation, re
    
    Reveal password to AI? [y/N]`, operation, resource)
 	}
-	
+
 	// For unmasked sensitive operations, default to deny
 	config := c.config
 	if !masked {
 		config.DefaultDeny = true
 	}
-	
+
 	confirmer := NewConfirmer(config)
 	return confirmer.Confirm(ctx, message)
 }
@@ -81,7 +81,7 @@ func (c *Confirmer) promptUser(ctx context.Context, message string) *Confirmatio
 	// Create a context with timeout if specified
 	var promptCtx context.Context
 	var cancel context.CancelFunc
-	
+
 	if c.config.Timeout > 0 {
 		promptCtx, cancel = context.WithTimeout(ctx, c.config.Timeout)
 	} else {
@@ -103,12 +103,12 @@ func (c *Confirmer) promptUser(ctx context.Context, message string) *Confirmatio
 		if c.config.Timeout > 0 {
 			timeoutMsg = fmt.Sprintf(" (%v)", c.config.Timeout)
 		}
-		
+
 		defaultHint := "[Y/n]"
 		if c.config.DefaultDeny {
 			defaultHint = "[y/N]"
 		}
-		
+
 		fmt.Printf("%s %s%s ", message, defaultHint, timeoutMsg)
 
 		// Read user input
@@ -153,7 +153,7 @@ func (c *Confirmer) promptUser(ctx context.Context, message string) *Confirmatio
 // parseResponse parses the user's response to determine approval
 func (c *Confirmer) parseResponse(response string) bool {
 	response = strings.ToLower(strings.TrimSpace(response))
-	
+
 	// Empty response uses default
 	if response == "" {
 		return !c.config.DefaultDeny
@@ -175,7 +175,7 @@ func (c *Confirmer) parseResponse(response string) bool {
 // buildOperationMessage builds a formatted message for operation confirmation
 func (c *Confirmer) buildOperationMessage(operation, resource string, details map[string]interface{}) string {
 	message := fmt.Sprintf("Confirm: %s '%s'", operation, resource)
-	
+
 	if len(details) > 0 {
 		message += " with:"
 		for key, value := range details {
@@ -187,7 +187,7 @@ func (c *Confirmer) buildOperationMessage(operation, resource string, details ma
 			}
 		}
 	}
-	
+
 	message += "?"
 	return message
 }
@@ -198,7 +198,7 @@ func (c *Confirmer) isSensitiveKey(key string) bool {
 		"password", "secret", "key", "token", "auth", "credential",
 		"private", "passphrase", "pin", "code", "signature",
 	}
-	
+
 	keyLower := strings.ToLower(key)
 	for _, sensitive := range sensitiveKeys {
 		if strings.Contains(keyLower, sensitive) {
@@ -249,7 +249,7 @@ func (c *Confirmer) ConfirmBatchOperation(ctx context.Context, operation string,
 
 	// Build batch message
 	message := fmt.Sprintf("Confirm batch %s for %d items:", operation, len(items))
-	
+
 	// Show first few items
 	showCount := 5
 	for i, item := range items {
@@ -259,9 +259,9 @@ func (c *Confirmer) ConfirmBatchOperation(ctx context.Context, operation string,
 		}
 		message += fmt.Sprintf("\n  - %s", item)
 	}
-	
+
 	message += "\nProceed?"
-	
+
 	return c.Confirm(ctx, message)
 }
 
@@ -285,10 +285,10 @@ func (c *Confirmer) ShowProgress(current, total int, message string) {
 	if c.config.BatchMode {
 		return // Don't show progress in batch mode
 	}
-	
+
 	percent := float64(current) / float64(total) * 100
 	fmt.Printf("\r[%3.0f%%] %s (%d/%d)", percent, message, current, total)
-	
+
 	if current == total {
 		fmt.Println() // New line when complete
 	}

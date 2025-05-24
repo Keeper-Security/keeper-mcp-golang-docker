@@ -1,3 +1,4 @@
+//go:build integration
 // +build integration
 
 package ksm
@@ -31,7 +32,7 @@ func TestRealKSMIntegration(t *testing.T) {
 
 	// Log the config structure (without sensitive data)
 	t.Logf("Config keys received: %v", getMapKeys(config))
-	
+
 	// Save config for reuse
 	configJSON, _ := json.MarshalIndent(config, "", "  ")
 	t.Logf("Config structure (for mock data):\n%s", maskSensitiveJSON(configJSON))
@@ -205,12 +206,12 @@ func createTestLogger(t *testing.T) *audit.Logger {
 		MaxSize:  10 * 1024 * 1024,
 		MaxAge:   24 * time.Hour,
 	}
-	
+
 	logger, err := audit.NewLogger(config)
 	if err != nil {
 		t.Fatalf("Failed to create logger: %v", err)
 	}
-	
+
 	return logger
 }
 

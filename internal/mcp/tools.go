@@ -318,7 +318,7 @@ func (s *Server) executeTool(toolName string, args json.RawMessage) (interface{}
 		return s.executeGeneratePassword(client, args)
 	case "get_totp_code":
 		return s.executeGetTOTPCode(client, args)
-	
+
 	// Phase 2 Tools
 	case "create_secret":
 		return s.executeCreateSecret(client, args)
@@ -336,7 +336,7 @@ func (s *Server) executeTool(toolName string, args json.RawMessage) (interface{}
 		return s.executeCreateFolder(client, args)
 	case "health_check":
 		return s.handleHealthCheck(context.Background(), args)
-	
+
 	default:
 		return nil, fmt.Errorf("unknown tool: %s", toolName)
 	}

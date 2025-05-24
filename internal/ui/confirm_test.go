@@ -407,7 +407,7 @@ func TestConfigurationMethods(t *testing.T) {
 
 	confirmer.SetConfig(newConfig)
 	updatedConfig := confirmer.GetConfig()
-	
+
 	if updatedConfig.BatchMode != newConfig.BatchMode {
 		t.Error("SetConfig did not update configuration")
 	}
@@ -423,7 +423,7 @@ func TestConfigurationMethods(t *testing.T) {
 		AutoApprove: false,
 	}
 	confirmer.SetConfig(interactiveConfig)
-	
+
 	if !confirmer.IsInteractive() {
 		t.Error("Should be interactive when not in batch mode and not auto-approve")
 	}

@@ -149,7 +149,7 @@ func (e *Encryptor) encodeEncryptedData(data *EncryptedData) string {
 	combined = append(combined, data.Salt...)
 	combined = append(combined, data.Nonce...)
 	combined = append(combined, data.Ciphertext...)
-	
+
 	return base64.StdEncoding.EncodeToString(combined)
 }
 
