@@ -87,9 +87,9 @@ func runProfilesList(cmd *cobra.Command, args []string) error {
 	var store *storage.ProfileStore
 	if cfg.Security.MasterPasswordHash != "" {
 		fmt.Fprint(os.Stderr, "Enter master password: ")
-		password, err := readPassword()
-		if err != nil {
-			return fmt.Errorf("failed to read password: %w", err)
+		password, readErr := readPassword()
+		if readErr != nil {
+			return fmt.Errorf("failed to read password: %w", readErr)
 		}
 
 		store, err = storage.NewProfileStoreWithPassword(configDir, password)
@@ -151,9 +151,9 @@ func runProfilesDelete(cmd *cobra.Command, args []string) error {
 	var store *storage.ProfileStore
 	if cfg.Security.MasterPasswordHash != "" {
 		fmt.Fprint(os.Stderr, "Enter master password: ")
-		password, err := readPassword()
-		if err != nil {
-			return fmt.Errorf("failed to read password: %w", err)
+		password, readErr := readPassword()
+		if readErr != nil {
+			return fmt.Errorf("failed to read password: %w", readErr)
 		}
 
 		store, err = storage.NewProfileStoreWithPassword(configDir, password)
@@ -216,9 +216,9 @@ func runProfilesSetDefault(cmd *cobra.Command, args []string) error {
 	var store *storage.ProfileStore
 	if cfg.Security.MasterPasswordHash != "" {
 		fmt.Fprint(os.Stderr, "Enter master password: ")
-		password, err := readPassword()
-		if err != nil {
-			return fmt.Errorf("failed to read password: %w", err)
+		password, readErr := readPassword()
+		if readErr != nil {
+			return fmt.Errorf("failed to read password: %w", readErr)
 		}
 
 		store, err = storage.NewProfileStoreWithPassword(configDir, password)
@@ -267,9 +267,9 @@ func runProfilesShow(cmd *cobra.Command, args []string) error {
 	var store *storage.ProfileStore
 	if cfg.Security.MasterPasswordHash != "" {
 		fmt.Fprint(os.Stderr, "Enter master password: ")
-		password, err := readPassword()
-		if err != nil {
-			return fmt.Errorf("failed to read password: %w", err)
+		password, readErr := readPassword()
+		if readErr != nil {
+			return fmt.Errorf("failed to read password: %w", readErr)
 		}
 
 		store, err = storage.NewProfileStoreWithPassword(configDir, password)
