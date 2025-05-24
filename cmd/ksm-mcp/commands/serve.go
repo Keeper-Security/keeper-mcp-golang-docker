@@ -89,11 +89,12 @@ func runServe(cmd *cobra.Command, args []string) error {
 				},
 			}
 			// Apply Docker-specific config
-			dockerConfig := config.GetDockerConfig()
-			if serverCfg, ok := dockerConfig["server"].(map[string]interface{}); ok {
-				cfg.Server.Host = serverCfg["host"].(string)
-				cfg.Server.Port = serverCfg["port"].(int)
-			}
+			// TODO: Add server config to Config struct
+			// dockerConfig := config.GetDockerConfig()
+			// if serverCfg, ok := dockerConfig["server"].(map[string]interface{}); ok {
+			// 	cfg.Server.Host = serverCfg["host"].(string)
+			// 	cfg.Server.Port = serverCfg["port"].(int)
+			// }
 		} else {
 			return fmt.Errorf("failed to load config: %w", err)
 		}
@@ -156,8 +157,11 @@ func runServe(cmd *cobra.Command, args []string) error {
 	
 	// If using Docker profile, add it to the store
 	if dockerProfile != nil && profileName == "docker" {
-		if err := store.SaveProfile(dockerProfile); err != nil {
-			return fmt.Errorf("failed to save Docker profile: %w", err)
+		if err := store.CreateProfile(dockerProfile.Name, dockerProfile.Config); err != nil {
+			// Profile might already exist, which is ok
+			if !store.ProfileExists(dockerProfile.Name) {
+				return fmt.Errorf("failed to save Docker profile: %w", err)
+			}
 		}
 	}
 

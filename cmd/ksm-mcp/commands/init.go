@@ -121,11 +121,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 			fmt.Println("Your KSM credentials will be stored in plain text.")
 			fmt.Println("This is NOT RECOMMENDED for production use.")
 			
-			var err error
-			store, err = storage.NewProfileStore(configDir)
-			if err != nil {
-				return fmt.Errorf("failed to create profile store: %w", err)
-			}
+			store = storage.NewProfileStore(configDir)
 		} else {
 			// Prompt for master password
 			fmt.Println("First time setup - please create a master password.")

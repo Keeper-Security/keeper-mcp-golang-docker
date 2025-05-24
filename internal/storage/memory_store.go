@@ -30,8 +30,7 @@ func (m *MemoryProfileStore) AddProfile(name string, client interface{}) {
 	
 	profile := &types.Profile{
 		Name:      name,
-		Type:      "one-time-token",
-		Config:    make(map[string]interface{}),
+		Config:    make(map[string]string),
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}

@@ -33,8 +33,7 @@ func LoadDockerSecrets() (*types.Profile, error) {
 		if token != "" {
 			profile := &types.Profile{
 				Name: "docker",
-				Type: "one-time-token",
-				Config: map[string]interface{}{
+				Config: map[string]string{
 					"token": token,
 				},
 			}
@@ -48,10 +47,21 @@ func LoadDockerSecrets() (*types.Profile, error) {
 		// Try to parse as JSON first
 		var config map[string]interface{}
 		if err := json.Unmarshal(configData, &config); err == nil {
+			// Convert map[string]interface{} to map[string]string
+			configStr := make(map[string]string)
+			for k, v := range config {
+				if str, ok := v.(string); ok {
+					configStr[k] = str
+				} else {
+					// Convert non-string values to JSON
+					if bytes, err := json.Marshal(v); err == nil {
+						configStr[k] = string(bytes)
+					}
+				}
+			}
 			profile := &types.Profile{
 				Name:   "docker",
-				Type:   "config-file",
-				Config: config,
+				Config: configStr,
 			}
 			return profile, nil
 		}
@@ -60,10 +70,21 @@ func LoadDockerSecrets() (*types.Profile, error) {
 		decoded, err := base64.StdEncoding.DecodeString(string(configData))
 		if err == nil {
 			if err := json.Unmarshal(decoded, &config); err == nil {
+				// Convert map[string]interface{} to map[string]string
+				configStr := make(map[string]string)
+				for k, v := range config {
+					if str, ok := v.(string); ok {
+						configStr[k] = str
+					} else {
+						// Convert non-string values to JSON
+						if bytes, err := json.Marshal(v); err == nil {
+							configStr[k] = string(bytes)
+						}
+					}
+				}
 				profile := &types.Profile{
 					Name:   "docker",
-					Type:   "config-file", 
-					Config: config,
+					Config: configStr,
 				}
 				return profile, nil
 			}

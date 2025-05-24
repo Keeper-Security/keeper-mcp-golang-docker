@@ -291,7 +291,7 @@ func (c *Client) SearchSecrets(query string) ([]*types.SecretMetadata, error) {
 		}
 		
 		// Search in field values if not already found
-		if !found && record.RecordData != nil {
+		if !found {
 			// Check standard fields
 			fieldTypes := []string{"login", "url", "hostname", "address"}
 			for _, fieldType := range fieldTypes {
@@ -546,24 +546,12 @@ func (c *Client) CreateSecret(params types.CreateSecretParams) (string, error) {
 		recordData.Notes = params.Notes
 	}
 	
-	// Add standard fields
+	// Add fields from params
 	var fields []interface{}
-	if login, ok := params.Fields["login"].(string); ok {
+	for _, field := range params.Fields {
 		fields = append(fields, map[string]interface{}{
-			"type": "login",
-			"value": []string{login},
-		})
-	}
-	if password, ok := params.Fields["password"].(string); ok {
-		fields = append(fields, map[string]interface{}{
-			"type": "password",
-			"value": []string{password},
-		})
-	}
-	if url, ok := params.Fields["url"].(string); ok {
-		fields = append(fields, map[string]interface{}{
-			"type": "url",
-			"value": []string{url},
+			"type": field.Type,
+			"value": field.Value,
 		})
 	}
 	recordData.Fields = fields
@@ -602,14 +590,16 @@ func (c *Client) UpdateSecret(params types.UpdateSecretParams) error {
 	if params.Title != "" {
 		record.SetTitle(params.Title)
 	}
-	if login, ok := params.Fields["login"].(string); ok {
-		record.SetFieldValueSingle("login", login)
-	}
-	if password, ok := params.Fields["password"].(string); ok {
-		record.SetPassword(password)
-	}
-	if url, ok := params.Fields["url"].(string); ok {
-		record.SetFieldValueSingle("url", url)
+	for _, field := range params.Fields {
+		if field.Type == "password" && len(field.Value) > 0 {
+			if password, ok := field.Value[0].(string); ok {
+				record.SetPassword(password)
+			}
+		} else if len(field.Value) > 0 {
+			if value, ok := field.Value[0].(string); ok {
+				record.SetFieldValueSingle(field.Type, value)
+			}
+		}
 	}
 	if params.Notes != "" {
 		record.SetNotes(params.Notes)

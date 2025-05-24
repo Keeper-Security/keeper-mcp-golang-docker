@@ -43,10 +43,10 @@ func (s *Server) HealthCheck(ctx context.Context) (*HealthStatus, error) {
 		status.Status = "unhealthy"
 	} else {
 		// Try to list profiles to verify storage is working
-		if _, err := s.storage.ListProfiles(); err != nil {
-			storageCheck.Status = "failed"
-			storageCheck.Error = err.Error()
-			status.Status = "unhealthy"
+		profiles := s.storage.ListProfiles()
+		if len(profiles) == 0 {
+			storageCheck.Status = "warning"
+			storageCheck.Error = "no profiles found"
 		}
 	}
 	status.Checks = append(status.Checks, storageCheck)
@@ -74,9 +74,6 @@ func (s *Server) HealthCheck(ctx context.Context) (*HealthStatus, error) {
 	if s.currentProfile != "" {
 		if client, exists := s.profiles[s.currentProfile]; exists && client != nil {
 			// Try a simple operation to verify connection
-			ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-			defer cancel()
-			
 			// Use a lightweight operation to check connectivity
 			if _, err := client.ListSecrets(""); err != nil {
 				ksmCheck.Status = "failed"
@@ -108,7 +105,7 @@ func (s *Server) HealthCheck(ctx context.Context) (*HealthStatus, error) {
 	rateCheck := Check{Name: "rate_limiter", Status: "ok"}
 	if s.rateLimiter != nil {
 		// Check if we're being rate limited
-		if !s.rateLimiter.checkLimit("health_check") {
+		if !s.rateLimiter.Allow("health_check") {
 			rateCheck.Status = "warning"
 			rateCheck.Error = "rate limit exceeded"
 			if status.Status == "healthy" {
