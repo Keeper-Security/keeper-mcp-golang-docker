@@ -5,14 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/keeper-security/ksm-mcp/internal/ksm"
 	"github.com/keeper-security/ksm-mcp/pkg/types"
 )
 
 // Phase 1 Tool Implementations
 
 // executeListSecrets handles the list_secrets tool
-func (s *Server) executeListSecrets(client *ksm.Client, args json.RawMessage) (interface{}, error) {
+func (s *Server) executeListSecrets(client KSMClient, args json.RawMessage) (interface{}, error) {
 	var params struct {
 		FolderUID string `json:"folder_uid,omitempty"`
 	}
@@ -46,7 +45,7 @@ func (s *Server) executeListSecrets(client *ksm.Client, args json.RawMessage) (i
 }
 
 // executeGetSecret handles the get_secret tool
-func (s *Server) executeGetSecret(client *ksm.Client, args json.RawMessage) (interface{}, error) {
+func (s *Server) executeGetSecret(client KSMClient, args json.RawMessage) (interface{}, error) {
 	var params struct {
 		UID    string   `json:"uid"`
 		Fields []string `json:"fields,omitempty"`
@@ -78,7 +77,7 @@ func (s *Server) executeGetSecret(client *ksm.Client, args json.RawMessage) (int
 }
 
 // executeSearchSecrets handles the search_secrets tool
-func (s *Server) executeSearchSecrets(client *ksm.Client, args json.RawMessage) (interface{}, error) {
+func (s *Server) executeSearchSecrets(client KSMClient, args json.RawMessage) (interface{}, error) {
 	var params struct {
 		Query string `json:"query"`
 	}
@@ -110,7 +109,7 @@ func (s *Server) executeSearchSecrets(client *ksm.Client, args json.RawMessage) 
 }
 
 // executeGetField handles the get_field tool
-func (s *Server) executeGetField(client *ksm.Client, args json.RawMessage) (interface{}, error) {
+func (s *Server) executeGetField(client KSMClient, args json.RawMessage) (interface{}, error) {
 	var params struct {
 		Notation string `json:"notation"`
 		Unmask   bool   `json:"unmask,omitempty"`
@@ -144,7 +143,7 @@ func (s *Server) executeGetField(client *ksm.Client, args json.RawMessage) (inte
 }
 
 // executeGeneratePassword handles the generate_password tool
-func (s *Server) executeGeneratePassword(client *ksm.Client, args json.RawMessage) (interface{}, error) {
+func (s *Server) executeGeneratePassword(client KSMClient, args json.RawMessage) (interface{}, error) {
 	var params types.GeneratePasswordParams
 
 	if err := json.Unmarshal(args, &params); err != nil {
@@ -223,7 +222,7 @@ func (s *Server) executeGeneratePassword(client *ksm.Client, args json.RawMessag
 }
 
 // executeGetTOTPCode handles the get_totp_code tool
-func (s *Server) executeGetTOTPCode(client *ksm.Client, args json.RawMessage) (interface{}, error) {
+func (s *Server) executeGetTOTPCode(client KSMClient, args json.RawMessage) (interface{}, error) {
 	var params struct {
 		UID string `json:"uid"`
 	}
@@ -243,7 +242,7 @@ func (s *Server) executeGetTOTPCode(client *ksm.Client, args json.RawMessage) (i
 // Phase 2 Tool Implementations
 
 // executeCreateSecret handles the create_secret tool
-func (s *Server) executeCreateSecret(client *ksm.Client, args json.RawMessage) (interface{}, error) {
+func (s *Server) executeCreateSecret(client KSMClient, args json.RawMessage) (interface{}, error) {
 	var params types.CreateSecretParams
 
 	if err := json.Unmarshal(args, &params); err != nil {
@@ -273,7 +272,7 @@ func (s *Server) executeCreateSecret(client *ksm.Client, args json.RawMessage) (
 }
 
 // executeUpdateSecret handles the update_secret tool
-func (s *Server) executeUpdateSecret(client *ksm.Client, args json.RawMessage) (interface{}, error) {
+func (s *Server) executeUpdateSecret(client KSMClient, args json.RawMessage) (interface{}, error) {
 	var params types.UpdateSecretParams
 
 	if err := json.Unmarshal(args, &params); err != nil {
@@ -301,7 +300,7 @@ func (s *Server) executeUpdateSecret(client *ksm.Client, args json.RawMessage) (
 }
 
 // executeDeleteSecret handles the delete_secret tool
-func (s *Server) executeDeleteSecret(client *ksm.Client, args json.RawMessage) (interface{}, error) {
+func (s *Server) executeDeleteSecret(client KSMClient, args json.RawMessage) (interface{}, error) {
 	var params struct {
 		UID string `json:"uid"`
 	}
@@ -340,7 +339,7 @@ func (s *Server) executeDeleteSecret(client *ksm.Client, args json.RawMessage) (
 }
 
 // executeUploadFile handles the upload_file tool
-func (s *Server) executeUploadFile(client *ksm.Client, args json.RawMessage) (interface{}, error) {
+func (s *Server) executeUploadFile(client KSMClient, args json.RawMessage) (interface{}, error) {
 	var params struct {
 		UID      string `json:"uid"`
 		FilePath string `json:"file_path"`
@@ -361,6 +360,7 @@ func (s *Server) executeUploadFile(client *ksm.Client, args json.RawMessage) (in
 		return nil, fmt.Errorf("operation cancelled by user")
 	}
 
+	// UploadFile expects (uid, filePath, title)
 	if err := client.UploadFile(params.UID, params.FilePath, params.Title); err != nil {
 		return nil, err
 	}
@@ -373,7 +373,7 @@ func (s *Server) executeUploadFile(client *ksm.Client, args json.RawMessage) (in
 }
 
 // executeDownloadFile handles the download_file tool
-func (s *Server) executeDownloadFile(client *ksm.Client, args json.RawMessage) (interface{}, error) {
+func (s *Server) executeDownloadFile(client KSMClient, args json.RawMessage) (interface{}, error) {
 	var params struct {
 		UID      string `json:"uid"`
 		FileUID  string `json:"file_uid"`
@@ -384,8 +384,8 @@ func (s *Server) executeDownloadFile(client *ksm.Client, args json.RawMessage) (
 		return nil, fmt.Errorf("invalid parameters: %w", err)
 	}
 
-	err := client.DownloadFile(params.UID, params.FileUID, params.SavePath)
-	if err != nil {
+	// DownloadFile expects (uid, fileUID, savePath)
+	if err := client.DownloadFile(params.UID, params.FileUID, params.SavePath); err != nil {
 		return nil, err
 	}
 
@@ -398,7 +398,7 @@ func (s *Server) executeDownloadFile(client *ksm.Client, args json.RawMessage) (
 }
 
 // executeListFolders handles the list_folders tool
-func (s *Server) executeListFolders(client *ksm.Client, args json.RawMessage) (interface{}, error) {
+func (s *Server) executeListFolders(client KSMClient, args json.RawMessage) (interface{}, error) {
 	folders, err := client.ListFolders()
 	if err != nil {
 		return nil, err
@@ -406,13 +406,13 @@ func (s *Server) executeListFolders(client *ksm.Client, args json.RawMessage) (i
 
 	// Ensure UIDs are prominent in output
 	return map[string]interface{}{
-		"folders": folders,
+		"folders": folders.Folders,
 		"count":   len(folders.Folders),
 	}, nil
 }
 
 // executeCreateFolder handles the create_folder tool
-func (s *Server) executeCreateFolder(client *ksm.Client, args json.RawMessage) (interface{}, error) {
+func (s *Server) executeCreateFolder(client KSMClient, args json.RawMessage) (interface{}, error) {
 	var params struct {
 		Name      string `json:"name"`
 		ParentUID string `json:"parent_uid,omitempty"`

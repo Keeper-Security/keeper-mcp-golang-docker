@@ -20,7 +20,7 @@ import (
 // Server implements the MCP protocol server
 type Server struct {
 	storage     *storage.ProfileStore
-	profiles    map[string]*ksm.Client
+	profiles    map[string]KSMClient
 	currentProfile string
 	logger      *audit.Logger
 	confirmer   *ui.Confirmer
@@ -62,7 +62,7 @@ func NewServer(storage *storage.ProfileStore, logger *audit.Logger, options *Ser
 
 	return &Server{
 		storage:     storage,
-		profiles:    make(map[string]*ksm.Client),
+		profiles:    make(map[string]KSMClient),
 		logger:      logger,
 		confirmer:   ui.NewConfirmer(confirmConfig),
 		options:     options,
@@ -204,7 +204,7 @@ func (s *Server) loadProfile(name string) error {
 }
 
 // getCurrentClient returns the current KSM client
-func (s *Server) getCurrentClient() (*ksm.Client, error) {
+func (s *Server) getCurrentClient() (KSMClient, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 

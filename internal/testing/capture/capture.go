@@ -125,7 +125,7 @@ func (dc *DataCapture) CaptureVault(client *ksm.SecretsManager) error {
 
 		// Download and save files
 		if len(record.Files) > 0 {
-			fmt.Printf("Processing %d files for record '%s'\n", len(record.Files), record.Title)
+			fmt.Printf("Processing %d files for record '%s'\n", len(record.Files), record.Title())
 			
 			for _, file := range record.Files {
 				fmt.Printf("  - Downloading file: %s\n", file.Name)

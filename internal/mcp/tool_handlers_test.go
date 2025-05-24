@@ -63,6 +63,62 @@ func (m *mockKSMClient) GeneratePassword(params types.GeneratePasswordParams) (s
 	return args.String(0), args.Error(1)
 }
 
+func (m *mockKSMClient) GetField(notation string, unmask bool) (interface{}, error) {
+	args := m.Called(notation, unmask)
+	return args.Get(0), args.Error(1)
+}
+
+func (m *mockKSMClient) GetTOTPCode(uid string) (*types.TOTPResponse, error) {
+	args := m.Called(uid)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*types.TOTPResponse), args.Error(1)
+}
+
+func (m *mockKSMClient) UploadFile(uid, filePath, title string) error {
+	args := m.Called(uid, filePath, title)
+	return args.Error(0)
+}
+
+func (m *mockKSMClient) DownloadFile(uid, fileUID, savePath string) error {
+	args := m.Called(uid, fileUID, savePath)
+	return args.Error(0)
+}
+
+func (m *mockKSMClient) ListFolders() (*types.ListFoldersResponse, error) {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*types.ListFoldersResponse), args.Error(1)
+}
+
+func (m *mockKSMClient) CreateFolder(name string, parentUID string) (string, error) {
+	args := m.Called(name, parentUID)
+	return args.String(0), args.Error(1)
+}
+
+func (m *mockKSMClient) TestConnection() error {
+	args := m.Called()
+	return args.Error(0)
+}
+
+func (m *mockKSMClient) UpdateSecret(params types.UpdateSecretParams) error {
+	args := m.Called(params)
+	return args.Error(0)
+}
+
+func (m *mockKSMClient) DeleteSecret(uid string, permanent bool) error {
+	args := m.Called(uid, permanent)
+	return args.Error(0)
+}
+
+func (m *mockKSMClient) GeneratePassword(params types.GeneratePasswordParams) (string, error) {
+	args := m.Called(params)
+	return args.String(0), args.Error(1)
+}
+
 // Mock Confirmer
 type mockConfirmer struct {
 	mock.Mock
@@ -134,9 +190,14 @@ func TestExecuteCreateSecret(t *testing.T) {
 			mockClient := new(mockKSMClient)
 			mockConfirmer := new(mockConfirmer)
 			
+			// Create a test logger
+			logger, _ := audit.NewLogger(audit.Config{
+				FilePath: "/tmp/test-audit.log",
+			})
+			
 			server := &Server{
-				confirmer: mockConfirmer,
-				logger:    audit.NewLogger("test", "test"),
+				confirmer: &ui.Confirmer{},
+				logger:    logger,
 			}
 
 			tt.mockSetup(mockClient, mockConfirmer)
@@ -214,8 +275,11 @@ func TestExecuteListSecrets(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockClient := new(mockKSMClient)
+			logger, _ := audit.NewLogger(audit.Config{
+				FilePath: "/tmp/test-audit.log",
+			})
 			server := &Server{
-				logger: audit.NewLogger("test", "test"),
+				logger: logger,
 			}
 
 			tt.mockSetup(mockClient)
@@ -284,9 +348,12 @@ func TestExecuteGetSecret(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockClient := new(mockKSMClient)
 			mockConfirmer := new(mockConfirmer)
+			logger, _ := audit.NewLogger(audit.Config{
+				FilePath: "/tmp/test-audit.log",
+			})
 			server := &Server{
 				confirmer: mockConfirmer,
-				logger:    audit.NewLogger("test", "test"),
+				logger:    logger,
 			}
 
 			tt.mockSetup(mockClient, mockConfirmer)
@@ -351,9 +418,12 @@ func TestExecuteUpdateSecret(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockClient := new(mockKSMClient)
 			mockConfirmer := new(mockConfirmer)
+			logger, _ := audit.NewLogger(audit.Config{
+				FilePath: "/tmp/test-audit.log",
+			})
 			server := &Server{
 				confirmer: mockConfirmer,
-				logger:    audit.NewLogger("test", "test"),
+				logger:    logger,
 			}
 
 			tt.mockSetup(mockClient, mockConfirmer)
@@ -431,9 +501,12 @@ func TestExecuteDeleteSecret(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockClient := new(mockKSMClient)
 			mockConfirmer := new(mockConfirmer)
+			logger, _ := audit.NewLogger(audit.Config{
+				FilePath: "/tmp/test-audit.log",
+			})
 			server := &Server{
 				confirmer: mockConfirmer,
-				logger:    audit.NewLogger("test", "test"),
+				logger:    logger,
 			}
 
 			tt.mockSetup(mockClient, mockConfirmer)
@@ -507,8 +580,11 @@ func TestExecuteSearchSecrets(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockClient := new(mockKSMClient)
+			logger, _ := audit.NewLogger(audit.Config{
+				FilePath: "/tmp/test-audit.log",
+			})
 			server := &Server{
-				logger: audit.NewLogger("test", "test"),
+				logger: logger,
 			}
 
 			tt.mockSetup(mockClient)

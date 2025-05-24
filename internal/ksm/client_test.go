@@ -283,10 +283,19 @@ func TestCreateSecretParams(t *testing.T) {
 		FolderUID: "folder-123",
 		Type:      "login",
 		Title:     "New Secret",
-		Fields: map[string]interface{}{
-			"login":    "user@example.com",
-			"password": "secret123",
-			"url":      "https://example.com",
+		Fields: []types.SecretField{
+			{
+				Type:  "login",
+				Value: []interface{}{"user@example.com"},
+			},
+			{
+				Type:  "password",
+				Value: []interface{}{"secret123"},
+			},
+			{
+				Type:  "url",
+				Value: []interface{}{"https://example.com"},
+			},
 		},
 		Notes: "Test notes",
 	}
@@ -295,7 +304,17 @@ func TestCreateSecretParams(t *testing.T) {
 		t.Errorf("Expected title 'New Secret', got %s", params.Title)
 	}
 
-	if login, ok := params.Fields["login"].(string); !ok || login != "user@example.com" {
+	// Check login field
+	found := false
+	for _, field := range params.Fields {
+		if field.Type == "login" && len(field.Value) > 0 {
+			if login, ok := field.Value[0].(string); ok && login == "user@example.com" {
+				found = true
+				break
+			}
+		}
+	}
+	if !found {
 		t.Error("Login field mismatch")
 	}
 }
@@ -304,8 +323,11 @@ func TestUpdateSecretParams(t *testing.T) {
 	params := types.UpdateSecretParams{
 		UID:   "test-uid-123",
 		Title: "Updated Secret",
-		Fields: map[string]interface{}{
-			"password": "newpassword123",
+		Fields: []types.SecretField{
+			{
+				Type:  "password",
+				Value: []interface{}{"newpassword123"},
+			},
 		},
 		Notes: "Updated notes",
 	}

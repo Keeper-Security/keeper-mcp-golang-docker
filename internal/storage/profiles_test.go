@@ -20,10 +20,7 @@ func TestNewProfileStore(t *testing.T) {
 		}
 	}()
 
-	store, err := NewProfileStore()
-	if err != nil {
-		t.Fatalf("Failed to create profile store: %v", err)
-	}
+	store := NewProfileStore(tempDir)
 	defer store.Close()
 
 	// Verify master key was created
@@ -64,7 +61,8 @@ func TestNewProfileStoreWithPassword(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			store, err := NewProfileStoreWithPassword(tt.password)
+			tempDir := t.TempDir()
+		store, err := NewProfileStoreWithPassword(tempDir, tt.password)
 			
 			if tt.wantErr {
 				if err == nil {
@@ -369,22 +367,16 @@ func TestPersistence(t *testing.T) {
 	}
 
 	// Create first store and add profile
-	store1, err := NewProfileStore()
-	if err != nil {
-		t.Fatalf("Failed to create first store: %v", err)
-	}
+	store1 := NewProfileStore(tempDir)
 
-	err = store1.CreateProfile("persistent-profile", config)
+	err := store1.CreateProfile("persistent-profile", config)
 	if err != nil {
 		t.Fatalf("Failed to create profile: %v", err)
 	}
 	store1.Close()
 
 	// Create second store (should load existing data)
-	store2, err := NewProfileStore()
-	if err != nil {
-		t.Fatalf("Failed to create second store: %v", err)
-	}
+	store2 := NewProfileStore(tempDir)
 	defer store2.Close()
 
 	// Verify profile was persisted
@@ -514,10 +506,7 @@ func setupTestStore(t *testing.T) *ProfileStore {
 		}
 	})
 
-	store, err := NewProfileStore()
-	if err != nil {
-		t.Fatalf("Failed to create test store: %v", err)
-	}
+	store := NewProfileStore(tempDir)
 
 	return store
 }
