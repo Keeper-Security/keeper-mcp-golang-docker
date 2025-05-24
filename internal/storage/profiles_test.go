@@ -23,11 +23,8 @@ func TestNewProfileStore(t *testing.T) {
 	store := NewProfileStore(tempDir)
 	defer store.Close()
 
-	// Verify master key was created
-	keyPath := filepath.Join(tempDir, MasterKeyFileName)
-	if _, err := os.Stat(keyPath); os.IsNotExist(err) {
-		t.Error("Master key file was not created")
-	}
+	// Note: NewProfileStore no longer automatically creates a master key
+	// It's created when needed (e.g., when calling Initialize or CreateProfile)
 
 	// Verify initial state
 	profiles := store.ListProfiles()

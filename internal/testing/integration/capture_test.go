@@ -223,8 +223,13 @@ INSERT INTO users (username, email, password_hash) VALUES
 		if i > 0 {
 			dump += ",\n"
 		}
+		hashBytes := []byte(fmt.Sprintf("hash_%d_padding_to_make_it_longer_for_base64_encoding", i))
+		encodedHash := base64.StdEncoding.EncodeToString(hashBytes)
+		if len(encodedHash) > 60 {
+			encodedHash = encodedHash[:60]
+		}
 		dump += fmt.Sprintf("('user_%d', 'user%d@example.com', '$2y$10$%s')",
-			i, i, base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("hash_%d", i)))[:60])
+			i, i, encodedHash)
 	}
 	dump += ";\n\n"
 

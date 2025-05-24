@@ -431,15 +431,15 @@ func TestValidator_MaxLengthEnforcement(t *testing.T) {
 		{
 			name:        "Search query reasonable",
 			testFunc:    v.ValidateSearchQuery,
-			maxLength:   100,
-			input:       strings.Repeat("A", 50),
+			maxLength:   256,
+			input:       strings.Repeat("A", 100),
 			expectError: false,
 		},
 		{
 			name:        "Search query too long",
 			testFunc:    v.ValidateSearchQuery,
-			maxLength:   100,
-			input:       strings.Repeat("A", 101),
+			maxLength:   256,
+			input:       strings.Repeat("A", 257),
 			expectError: true,
 		},
 	}
