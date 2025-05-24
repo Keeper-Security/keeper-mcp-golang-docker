@@ -1,0 +1,234 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ksm-mcp
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ksm-secrets
+  namespace: ksm-mcp
+type: Opaque
+data:
+  # Base64 encode your values: echo -n "your-token" | base64
+  token: <base64-encoded-token>
+  master-password: <base64-encoded-password>
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ksm-mcp-config
+  namespace: ksm-mcp
+data:
+  config.yaml: |
+    server:
+      host: 0.0.0.0
+      port: 8080
+    mcp:
+      rate_limit:
+        requests_per_minute: 60
+    security:
+      enable_master_password: true
+      confirmations:
+        enabled: true
+    logging:
+      level: info
+      format: json
+    profiles:
+      default: kubernetes
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ksm-mcp-storage
+  namespace: ksm-mcp
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: standard
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ksm-mcp
+  namespace: ksm-mcp
+  labels:
+    app: ksm-mcp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ksm-mcp
+  template:
+    metadata:
+      labels:
+        app: ksm-mcp
+    spec:
+      serviceAccountName: ksm-mcp
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+      - name: ksm-mcp
+        image: keeper/ksm-mcp:latest
+        imagePullPolicy: Always
+        command: ["ksm-mcp", "serve", "--batch"]
+        env:
+        - name: KSM_MCP_CONFIG_DIR
+          value: "/home/keeper/.keeper/ksm-mcp"
+        - name: KSM_MCP_PROFILE
+          value: "kubernetes"
+        - name: KSM_MCP_LOG_LEVEL
+          value: "info"
+        - name: KSM_MCP_BATCH_MODE
+          value: "true"
+        volumeMounts:
+        - name: config
+          mountPath: /home/keeper/.keeper/ksm-mcp
+        - name: storage
+          mountPath: /var/lib/ksm-mcp
+        - name: ksm-token
+          mountPath: /run/secrets/ksm_token
+          subPath: token
+          readOnly: true
+        - name: master-password
+          mountPath: /run/secrets/master_password
+          subPath: master-password
+          readOnly: true
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          exec:
+            command:
+            - ksm-mcp
+            - health-check
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - ksm-mcp
+            - test
+            - --profile
+            - kubernetes
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+      volumes:
+      - name: config
+        configMap:
+          name: ksm-mcp-config
+      - name: storage
+        persistentVolumeClaim:
+          claimName: ksm-mcp-storage
+      - name: ksm-token
+        secret:
+          secretName: ksm-secrets
+          items:
+          - key: token
+            path: token
+      - name: master-password
+        secret:
+          secretName: ksm-secrets
+          items:
+          - key: master-password
+            path: master-password
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ksm-mcp
+  namespace: ksm-mcp
+  labels:
+    app: ksm-mcp
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+    name: http
+  selector:
+    app: ksm-mcp
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ksm-mcp
+  namespace: ksm-mcp
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ksm-mcp
+  namespace: ksm-mcp
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ksm-mcp
+  namespace: ksm-mcp
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: ksm-mcp
+subjects:
+- kind: ServiceAccount
+  name: ksm-mcp
+  namespace: ksm-mcp
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ksm-mcp
+  namespace: ksm-mcp
+spec:
+  podSelector:
+    matchLabels:
+      app: ksm-mcp
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: claude-desktop
+    ports:
+    - protocol: TCP
+      port: 8080
+  egress:
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: TCP
+      port: 443  # HTTPS for KSM API
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: TCP
+      port: 53  # DNS
+    - protocol: UDP
+      port: 53

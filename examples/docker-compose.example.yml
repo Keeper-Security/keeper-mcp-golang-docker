@@ -1,0 +1,152 @@
+# Example Docker Compose configuration for KSM MCP
+# Copy this file to docker-compose.yml and customize
+
+version: '3.8'
+
+services:
+  # Basic setup with local config
+  ksm-mcp-basic:
+    image: keeper/ksm-mcp:latest
+    container_name: ksm-mcp-basic
+    environment:
+      - KSM_MCP_PROFILE=default
+      - KSM_MCP_LOG_LEVEL=info
+    volumes:
+      - ./config:/home/keeper/.keeper/ksm-mcp
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+
+  # Production setup with secrets
+  ksm-mcp-production:
+    image: keeper/ksm-mcp:latest
+    container_name: ksm-mcp-prod
+    environment:
+      - KSM_MCP_PROFILE=production
+      - KSM_MCP_LOG_LEVEL=warn
+      - KSM_MCP_BATCH_MODE=true
+    volumes:
+      - ksm-config:/home/keeper/.keeper/ksm-mcp
+      - ksm-logs:/var/log/ksm-mcp
+    secrets:
+      - ksm_token
+      - ksm_config
+      - master_password
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+    profiles:
+      - production
+
+  # Development setup with local files
+  ksm-mcp-dev:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: ksm-mcp-dev
+    environment:
+      - KSM_MCP_PROFILE=development
+      - KSM_MCP_LOG_LEVEL=debug
+      - KSM_MCP_ENV=development
+    volumes:
+      - ./config:/home/keeper/.keeper/ksm-mcp
+      - ./logs:/var/log/ksm-mcp
+      - ../:/workspace:ro  # Mount source for development
+    stdin_open: true
+    tty: true
+    command: ["serve", "--verbose"]
+    profiles:
+      - development
+
+  # Integration with monitoring
+  ksm-mcp-monitored:
+    image: keeper/ksm-mcp:latest
+    container_name: ksm-mcp-monitored
+    environment:
+      - KSM_MCP_PROFILE=production
+      - KSM_MCP_METRICS_ENABLED=true
+      - KSM_MCP_METRICS_PORT=9090
+    volumes:
+      - ksm-config:/home/keeper/.keeper/ksm-mcp
+    ports:
+      - "9090:9090"  # Metrics endpoint
+    healthcheck:
+      test: ["CMD", "ksm-mcp", "test", "--profile", "production"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - monitoring
+    profiles:
+      - monitoring
+
+  # Prometheus for metrics collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    ports:
+      - "9091:9090"
+    networks:
+      - monitoring
+    profiles:
+      - monitoring
+
+  # Grafana for visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    networks:
+      - monitoring
+    profiles:
+      - monitoring
+
+# Volumes
+volumes:
+  ksm-config:
+    driver: local
+  ksm-logs:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
+
+# Networks
+networks:
+  monitoring:
+    driver: bridge
+
+# Secrets (external - must be created before running)
+secrets:
+  ksm_token:
+    file: ./secrets/ksm_token.txt
+  ksm_config:
+    file: ./secrets/ksm_config.json
+  master_password:
+    file: ./secrets/master_password.txt
+
+# Usage examples:
+# 
+# 1. Basic setup:
+#    docker-compose up ksm-mcp-basic
+#
+# 2. Production with secrets:
+#    docker-compose --profile production up -d
+#
+# 3. Development mode:
+#    docker-compose --profile development up
+#
+# 4. With monitoring:
+#    docker-compose --profile monitoring up -d

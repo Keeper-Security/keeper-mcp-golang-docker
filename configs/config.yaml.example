@@ -1,0 +1,33 @@
+# KSM MCP Server Configuration Example
+# Copy this file to ~/.config/ksm-mcp/config.yaml and customize as needed
+
+# MCP Protocol Settings
+mcp:
+  timeout: 30s
+  rate_limit:
+    requests_per_minute: 60
+    requests_per_hour: 1000
+
+# Security Settings
+security:
+  batch_mode: false          # Can be overridden by --batch flag
+  auto_approve: false        # Can be overridden by --auto-approve flag (DANGEROUS)
+  mask_by_default: true      # Mask sensitive fields by default
+  session_timeout: 15m       # How long sessions stay active
+  confirmation_timeout: 30s  # How long to wait for user confirmation
+
+# Logging Settings
+logging:
+  level: info               # debug, info, warn, error
+  file: ~/.config/ksm-mcp/audit.log  # Audit log file location
+
+# Profile Settings
+profiles:
+  default: production       # Default profile to use if none specified
+
+# Environment Variable Overrides:
+# KSM_MCP_CONFIG_DIR      - Config directory location
+# KSM_MCP_PROFILE         - Default profile
+# KSM_MCP_BATCH_MODE      - Enable batch mode (no prompts)
+# KSM_MCP_AUTO_APPROVE    - Auto-approve all operations (DANGEROUS)
+# KSM_MCP_LOG_LEVEL       - Log verbosity

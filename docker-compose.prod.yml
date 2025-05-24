@@ -1,0 +1,158 @@
+version: '3.8'
+
+# Production Docker Compose configuration
+# Use with: docker-compose -f docker-compose.prod.yml up -d
+
+services:
+  ksm-mcp:
+    image: keeper-mcp:${VERSION:-latest}
+    container_name: ksm-mcp-prod
+    
+    # Production environment
+    environment:
+      - KSM_MCP_CONFIG_DIR=/home/keeper/.keeper/ksm-mcp
+      - KSM_MCP_PROFILE=production
+      - KSM_MCP_LOG_LEVEL=warn
+      - KSM_MCP_BATCH_MODE=true
+      - KSM_MCP_ENABLE_METRICS=true
+      - KSM_MCP_METRICS_PORT=9090
+    
+    # Production volumes
+    volumes:
+      # Use named volumes in production
+      - ksm-config-prod:/home/keeper/.keeper/ksm-mcp
+      - ksm-logs-prod:/var/log/ksm-mcp
+    
+    # External secrets (must be created beforehand)
+    secrets:
+      - source: ksm_token_prod
+        target: ksm_token
+      - source: ksm_config_prod
+        target: ksm_config
+      - source: master_password_prod
+        target: master_password
+    
+    # No interactive mode in production
+    stdin_open: false
+    tty: false
+    
+    # Production restart policy
+    restart: always
+    
+    # Production resource limits
+    deploy:
+      mode: replicated
+      replicas: 2
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+    
+    # Production health check
+    healthcheck:
+      test: ["CMD", "ksm-mcp", "test", "--profile", "production"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    
+    # Production logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "10"
+        labels: "service=ksm-mcp,env=production"
+    
+    # Isolated network
+    networks:
+      - ksm-prod-network
+    
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/run
+
+  # Metrics exporter (optional)
+  metrics-exporter:
+    image: prom/node-exporter:latest
+    container_name: ksm-metrics-exporter
+    networks:
+      - ksm-prod-network
+    ports:
+      - "127.0.0.1:9100:9100"
+    profiles:
+      - monitoring
+
+  # Log aggregator (optional)
+  log-aggregator:
+    image: fluent/fluent-bit:latest
+    container_name: ksm-log-aggregator
+    volumes:
+      - ksm-logs-prod:/var/log/ksm-mcp:ro
+      - ./fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
+    networks:
+      - ksm-prod-network
+    profiles:
+      - logging
+
+# Production networks
+networks:
+  ksm-prod-network:
+    driver: overlay
+    encrypted: true
+    attachable: false
+    ipam:
+      config:
+        - subnet: 10.0.10.0/24
+
+# Production volumes
+volumes:
+  ksm-config-prod:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /var/lib/ksm-mcp/config
+  
+  ksm-logs-prod:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /var/log/ksm-mcp
+
+# External secrets (created with docker secret create)
+secrets:
+  ksm_token_prod:
+    external: true
+    external_name: ksm_token_production
+  
+  ksm_config_prod:
+    external: true
+    external_name: ksm_config_production
+  
+  master_password_prod:
+    external: true
+    external_name: ksm_master_password_production

@@ -1,0 +1,52 @@
+# Example KSM MCP Configuration
+# Location: ~/.keeper/ksm-mcp/config.yaml
+
+# MCP Protocol Settings
+mcp:
+  # Request timeout - increase for slow networks
+  timeout: 30s
+  
+  # Rate limiting - protect against abuse
+  rate_limit:
+    requests_per_minute: 60
+    requests_per_hour: 1000
+
+# Security Configuration
+security:
+  # Batch mode - no interactive prompts
+  batch_mode: false
+  
+  # Auto-approve - DANGEROUS! Only for trusted environments
+  auto_approve: false
+  
+  # Mask sensitive fields by default
+  mask_by_default: true
+  
+  # Session timeout - how long before re-authentication
+  session_timeout: 15m
+  
+  # Confirmation timeout - how long to wait for user response
+  confirmation_timeout: 30s
+  
+  # Master password hash - auto-generated, do not edit
+  master_password_hash: "..."
+
+# Logging Configuration
+logging:
+  # Log level: debug, info, warn, error
+  level: info
+  
+  # Log file location - can be absolute path
+  file: ~/.keeper/ksm-mcp/logs/audit.log
+
+# Profile Settings
+profiles:
+  # Default profile to use when none specified
+  default: mycompany
+
+# Environment-Specific Overrides
+# These can also be set via environment variables:
+# - KSM_MCP_BATCH_MODE=true
+# - KSM_MCP_AUTO_APPROVE=false
+# - KSM_MCP_LOG_LEVEL=debug
+# - KSM_MCP_PROFILE=production
