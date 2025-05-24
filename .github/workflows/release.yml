@@ -1,239 +1,341 @@
-name: Release
+name: Release Pipeline
 
 on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g., v1.0.0)'
+        required: true
+        type: string
+      skip_tests:
+        description: 'Skip tests (not recommended)'
+        required: false
+        type: boolean
+        default: false
 
 env:
-  GO_VERSION: '1.21'
-  DOCKER_BUILDKIT: 1
+  GO_VERSION: '1.23'
+  DOCKER_REGISTRY: docker.io
+  DOCKER_IMAGE: keepersecurityinc/ksm-mcp-poc
 
 jobs:
-  create-release:
-    name: Create Release
+  # Step 1: Run all tests
+  test:
+    name: Test Suite
     runs-on: ubuntu-latest
-    outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
-      version: ${{ steps.get_version.outputs.version }}
+    if: ${{ !inputs.skip_tests }}
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Get version
-      id: get_version
-      run: echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
 
-    - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ github.ref }}
-        release_name: KSM MCP ${{ steps.get_version.outputs.version }}
-        draft: true
-        prerelease: false
-        body: |
-          ## Changes in this Release
-          
-          ### Features
-          - 
-          
-          ### Bug Fixes
-          - 
-          
-          ### Documentation
-          - 
-          
-          ## Installation
-          
-          ### Docker
-          ```bash
-          docker pull keeper/ksm-mcp:${{ steps.get_version.outputs.version }}
-          ```
-          
-          ### Binary
-          Download the appropriate binary for your platform from the assets below.
-          
-          ### Homebrew (macOS/Linux)
-          ```bash
-          brew tap keeper-security/tap
-          brew install ksm-mcp
-          ```
-          
-          ## Checksums
-          See `checksums.txt` in the release assets.
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
 
-  build-binaries:
+      - name: Install dependencies
+        run: |
+          go mod download
+          go mod verify
+
+      - name: Run formatting check
+        run: |
+          if [ -n "$(gofmt -l .)" ]; then
+            echo "Code is not properly formatted. Run 'go fmt ./...'"
+            gofmt -d .
+            exit 1
+          fi
+
+      - name: Run linter
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          args: --timeout=5m
+
+      - name: Run unit tests
+        run: |
+          go test -v -race -coverprofile=coverage.out ./...
+          go tool cover -html=coverage.out -o coverage.html
+
+      - name: Run integration tests
+        run: |
+          go test -v -tags=integration ./test/integration/...
+
+      - name: Run security scan
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          gosec -fmt sarif -out gosec-results.sarif ./... || true
+
+      - name: Upload test coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.html
+
+      - name: Upload security results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: gosec-results.sarif
+
+  # Step 2: Build binaries for multiple platforms
+  build:
     name: Build Binaries
+    needs: test
     runs-on: ubuntu-latest
-    needs: create-release
+    if: ${{ always() && (needs.test.result == 'success' || inputs.skip_tests) }}
     strategy:
       matrix:
         include:
           - os: linux
             arch: amd64
-            suffix: ''
           - os: linux
             arch: arm64
-            suffix: ''
           - os: darwin
             arch: amd64
-            suffix: ''
           - os: darwin
             arch: arm64
-            suffix: ''
           - os: windows
             arch: amd64
-            suffix: '.exe'
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: ${{ env.GO_VERSION }}
-        cache: true
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
 
-    - name: Build binary
-      run: |
-        VERSION=${{ needs.create-release.outputs.version }}
-        BINARY_NAME=ksm-mcp-${VERSION}-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.suffix }}
-        
-        GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} go build \
-          -ldflags="-w -s -X main.Version=${VERSION} -X main.BuildTime=$(date -u '+%Y-%m-%d_%H:%M:%S')" \
-          -o ${BINARY_NAME} \
-          ./cmd/ksm-mcp
-        
-        # Create archive
-        if [ "${{ matrix.os }}" = "windows" ]; then
-          zip ${BINARY_NAME}.zip ${BINARY_NAME}
-          ARCHIVE=${BINARY_NAME}.zip
-        else
-          tar czf ${BINARY_NAME}.tar.gz ${BINARY_NAME}
-          ARCHIVE=${BINARY_NAME}.tar.gz
-        fi
-        
-        # Generate checksum
-        sha256sum ${ARCHIVE} > ${ARCHIVE}.sha256
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.tag }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Building version: ${VERSION}"
 
-    - name: Upload Release Asset
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ needs.create-release.outputs.upload_url }}
-        asset_path: ./ksm-mcp-${{ needs.create-release.outputs.version }}-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.os == 'windows' && '.zip' || '.tar.gz' }}
-        asset_name: ksm-mcp-${{ needs.create-release.outputs.version }}-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.os == 'windows' && '.zip' || '.tar.gz' }}
-        asset_content_type: ${{ matrix.os == 'windows' && 'application/zip' || 'application/gzip' }}
+      - name: Extract code version
+        id: code_version
+        run: |
+          CODE_VERSION=$(grep -E 'const Version = "v[0-9]+\.[0-9]+\.[0-9]+"' cmd/ksm-mcp/main.go | cut -d'"' -f2)
+          echo "code_version=${CODE_VERSION}" >> $GITHUB_OUTPUT
 
-    - name: Upload Checksum
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ needs.create-release.outputs.upload_url }}
-        asset_path: ./ksm-mcp-${{ needs.create-release.outputs.version }}-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.os == 'windows' && '.zip' || '.tar.gz' }}.sha256
-        asset_name: ksm-mcp-${{ needs.create-release.outputs.version }}-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.os == 'windows' && '.zip' || '.tar.gz' }}.sha256
-        asset_content_type: text/plain
+      - name: Validate version match (for tag pushes)
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        run: |
+          if [ "${{ steps.version.outputs.version }}" != "${{ steps.code_version.outputs.code_version }}" ]; then
+            echo "❌ ERROR: Git tag (${{ steps.version.outputs.version }}) does not match code version (${{ steps.code_version.outputs.code_version }})"
+            echo "Please update the version in cmd/ksm-mcp/main.go"
+            exit 1
+          fi
 
-  docker-release:
-    name: Docker Release
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.os }}
+          GOARCH: ${{ matrix.arch }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          BINARY_NAME="ksm-mcp-${{ matrix.os }}-${{ matrix.arch }}"
+          if [ "${{ matrix.os }}" = "windows" ]; then
+            BINARY_NAME="${BINARY_NAME}.exe"
+          fi
+          
+          echo "Building ${BINARY_NAME}..."
+          go build -trimpath \
+            -ldflags "-X main.version=${VERSION} -w -s" \
+            -o "bin/${BINARY_NAME}" \
+            ./cmd/ksm-mcp
+
+      - name: Compress binary
+        run: |
+          cd bin
+          if [ "${{ matrix.os }}" = "windows" ]; then
+            zip "ksm-mcp-${{ matrix.os }}-${{ matrix.arch }}.zip" "ksm-mcp-${{ matrix.os }}-${{ matrix.arch }}.exe"
+          else
+            tar -czf "ksm-mcp-${{ matrix.os }}-${{ matrix.arch }}.tar.gz" "ksm-mcp-${{ matrix.os }}-${{ matrix.arch }}"
+          fi
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ matrix.os }}-${{ matrix.arch }}
+          path: |
+            bin/*.tar.gz
+            bin/*.zip
+
+  # Step 3: Create GitHub Release
+  release:
+    name: Create GitHub Release
+    needs: build
     runs-on: ubuntu-latest
-    needs: create-release
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up QEMU
-      uses: docker/setup-qemu-action@v3
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.tag }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: binary-*
 
-    - name: Log in to Docker Hub
-      uses: docker/login-action@v3
-      with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Organize release assets
+        run: |
+          mkdir -p release-assets
+          find artifacts -type f \( -name "*.tar.gz" -o -name "*.zip" \) -exec cp {} release-assets/ \;
+          ls -la release-assets/
 
-    - name: Log in to GitHub Container Registry
-      uses: docker/login-action@v3
-      with:
-        registry: ghcr.io
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          cat << EOF > release-notes.md
+          ## KSM MCP Server ${VERSION}
 
-    - name: Extract metadata
-      id: meta
-      uses: docker/metadata-action@v5
-      with:
-        images: |
-          keeper/ksm-mcp
-          ghcr.io/${{ github.repository }}
-        tags: |
-          type=semver,pattern={{version}},value=${{ needs.create-release.outputs.version }}
-          type=semver,pattern={{major}}.{{minor}},value=${{ needs.create-release.outputs.version }}
-          type=semver,pattern={{major}},value=${{ needs.create-release.outputs.version }}
-          type=raw,value=latest
+          ### 📦 Installation
 
-    - name: Build and push Docker image
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        platforms: linux/amd64,linux/arm64
-        push: true
-        tags: ${{ steps.meta.outputs.tags }}
-        labels: ${{ steps.meta.outputs.labels }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
-        build-args: |
-          VERSION=${{ needs.create-release.outputs.version }}
+          #### Binary Installation
+          Download the appropriate binary for your platform from the assets below.
 
-  update-homebrew:
-    name: Update Homebrew Formula
+          \`\`\`bash
+          # Linux/macOS
+          tar -xzf ksm-mcp-linux-amd64.tar.gz
+          chmod +x ksm-mcp-linux-amd64
+          sudo mv ksm-mcp-linux-amd64 /usr/local/bin/ksm-mcp
+
+          # Windows
+          # Extract the zip file and add to PATH
+          \`\`\`
+
+          #### Docker Installation
+          \`\`\`bash
+          docker pull keepersecurityinc/ksm-mcp-poc:${VERSION}
+          docker pull keepersecurityinc/ksm-mcp-poc:latest
+          \`\`\`
+
+          ### 🚀 What's Changed
+          See the [full changelog](https://github.com/Keeper-Security/ksm-mcp/compare/$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "main")...${VERSION})
+
+          ### 📋 Checksums
+          \`\`\`
+          $(cd release-assets && sha256sum * || shasum -a 256 *)
+          \`\`\`
+          EOF
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: ${{ steps.version.outputs.version }}
+          body_path: release-notes.md
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.version, '-') }}
+          files: release-assets/*
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+
+  # Step 4: Build and push Docker images
+  docker:
+    name: Build and Push Docker Images
+    needs: release
     runs-on: ubuntu-latest
-    needs: [create-release, build-binaries]
+    environment: poc
     steps:
-    - name: Checkout homebrew tap
-      uses: actions/checkout@v4
-      with:
-        repository: keeper-security/homebrew-tap
-        token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-        path: homebrew-tap
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Update formula
-      run: |
-        VERSION=${{ needs.create-release.outputs.version }}
-        VERSION_NO_V=${VERSION#v}
-        
-        cd homebrew-tap
-        
-        # Update the formula
-        sed -i "s/version \".*\"/version \"${VERSION_NO_V}\"/" Formula/ksm-mcp.rb
-        
-        # Commit and push
-        git config user.name github-actions
-        git config user.email github-actions@github.com
-        git add Formula/ksm-mcp.rb
-        git commit -m "Update ksm-mcp to ${VERSION}"
-        git push
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
-  finalize-release:
-    name: Finalize Release
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.DOCKER_REGISTRY }}
+          username: ${{ vars.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKER_IMAGE }}
+          tags: |
+            type=semver,pattern={{version}},value=${{ needs.release.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.release.outputs.version }}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VERSION=${{ needs.release.outputs.version }}
+
+  # Step 5: Summary
+  summary:
+    name: Pipeline Summary
+    needs: [test, build, release, docker]
     runs-on: ubuntu-latest
-    needs: [create-release, build-binaries, docker-release]
+    if: always()
     steps:
-    - name: Publish release
-      uses: actions/github-script@v6
-      with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
-        script: |
-          github.rest.repos.updateRelease({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            release_id: ${{ needs.create-release.outputs.release_id }},
-            draft: false
-          })
+      - name: Generate summary
+        run: |
+          echo "# Release Pipeline Summary 📊" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Status badges
+          echo "## Status" >> $GITHUB_STEP_SUMMARY
+          echo "| Stage | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| 🧪 Tests | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🔨 Build | ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 📦 Release | ${{ needs.release.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🐳 Docker | ${{ needs.docker.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ needs.docker.result }}" == "success" ]; then
+            echo "## 🎉 Release Complete!" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Docker Images" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+            echo "docker pull ${{ env.DOCKER_IMAGE }}:${{ needs.release.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+            echo "docker pull ${{ env.DOCKER_IMAGE }}:latest" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### GitHub Release" >> $GITHUB_STEP_SUMMARY
+            echo "https://github.com/Keeper-Security/ksm-mcp/releases/tag/${{ needs.release.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          fi
