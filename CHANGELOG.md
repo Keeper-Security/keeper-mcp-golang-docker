@@ -5,6 +5,31 @@ All notable changes to the KSM MCP project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2025-05-24
+
+### Added
+- Integration and E2E tests in CI workflow
+- CI-specific docker-compose.ci.yml for testing without secrets
+- Better error messages for configuration issues
+
+### Changed
+- Updated Go version from 1.21 to 1.23 to match go.mod requirements
+- Improved README with simpler setup options prioritized
+- Docker workflow now builds locally without pushing to Docker Hub in CI
+- Updated deprecated GitHub Actions (upload-artifact v3 to v4)
+
+### Fixed
+- Fixed golangci-lint ineffassign errors
+- Fixed gosec G304 security warnings with proper #nosec annotations
+- Fixed TestPersistence test failure by using consistent passwords
+- Fixed CreateProfile to copy config map instead of storing reference
+- Fixed docker-compose command to use v2 syntax (docker compose)
+- Fixed Docker buildx multi-platform export error
+
+### Security
+- Fixed potential issue where Close() could clear original config maps
+- All security scans now passing (gosec, trivy)
+
 ## [1.0.0] - 2024-01-15
 
 ### Added
