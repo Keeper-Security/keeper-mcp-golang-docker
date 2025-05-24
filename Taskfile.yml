@@ -1,0 +1,59 @@
+version: '3'
+
+vars:
+  BINARY_NAME: ksm-mcp
+  DOCKER_IMAGE: ksm-mcp-local
+
+tasks:
+  build:
+    desc: Build binary locally
+    cmds:
+      - go build -ldflags "-X main.Version={{.VERSION}}" -o {{.BINARY_NAME}} cmd/ksm-mcp/main.go
+      - echo "✓ Binary built - {{.BINARY_NAME}}"
+    vars:
+      VERSION: '{{default "dev" .VERSION}}'
+
+  docker-build:
+    desc: Build Docker image locally  
+    cmds:
+      - docker build -t {{.DOCKER_IMAGE}}:{{.VERSION}} .
+      - docker tag {{.DOCKER_IMAGE}}:{{.VERSION}} {{.DOCKER_IMAGE}}:latest
+      - echo "✓ Docker image built - {{.DOCKER_IMAGE}}:{{.VERSION}}"
+    vars:
+      VERSION: '{{default "dev" .VERSION}}'
+
+  docker-run:
+    desc: Run Docker image
+    deps: [docker-build]
+    cmds:
+      - docker run -it --rm {{.DOCKER_IMAGE}}:latest --help
+
+  test-local:
+    desc: Test Docker image
+    deps: [docker-build]
+    cmds:
+      - echo "Testing Docker image..."
+      - docker run --rm -e KSM_CONFIG_BASE64=dGVzdA== -e KSM_MCP_PROFILE=production -e KSM_MCP_BATCH_MODE=true {{.DOCKER_IMAGE}}:latest serve --batch 2>&1 | head -20 || true
+
+  test-claude:
+    desc: Show Claude config
+    cmds:
+      - echo "Claude Desktop config for {{.DOCKER_IMAGE}}:latest"
+      - echo "Replace YOUR_BASE64_CONFIG with your actual config"
+
+  clean:
+    desc: Clean artifacts
+    cmds:
+      - rm -f {{.BINARY_NAME}}
+
+  fmt:
+    desc: Format code
+    cmds:
+      - go fmt ./...
+
+  quick:
+    desc: Quick build and run
+    cmds:
+      - task: docker-build
+        vars: {VERSION: "{{.VERSION}}"}
+      - task: docker-run
