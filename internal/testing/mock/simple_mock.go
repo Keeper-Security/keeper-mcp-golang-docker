@@ -48,10 +48,9 @@ type CapturedCall struct {
 
 // SimpleMockServer provides a simple mock KSM server for testing
 type SimpleMockServer struct {
-	mu       sync.RWMutex
-	records  map[string]*SimpleRecord
-	folders  map[string]*Folder
-	captures []CapturedCall
+	mu      sync.RWMutex
+	records map[string]*SimpleRecord
+	folders map[string]*Folder
 }
 
 // NewSimpleMockServer creates a new simple mock server with test data

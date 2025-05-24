@@ -203,7 +203,7 @@ func TestServer_RateLimitingSecurity(t *testing.T) {
 		writer.Flush()
 
 		var response types.MCPResponse
-		json.Unmarshal(buf.Bytes(), &response)
+		_ = json.Unmarshal(buf.Bytes(), &response)
 
 		if response.Error != nil && response.Error.Code == -32029 {
 			rateLimitCount++
@@ -256,7 +256,7 @@ func TestServer_NoActiveSessionSecurity(t *testing.T) {
 	}
 
 	var response types.MCPResponse
-	json.Unmarshal(buf.Bytes(), &response)
+	_ = json.Unmarshal(buf.Bytes(), &response)
 
 	if response.Error == nil {
 		t.Error("expected error response")
@@ -342,7 +342,7 @@ func TestServer_MessageSizeLimit(t *testing.T) {
 		// Should fail or return error
 		if err == nil {
 			var response types.MCPResponse
-			json.Unmarshal(buf.Bytes(), &response)
+			_ = json.Unmarshal(buf.Bytes(), &response)
 			if response.Error == nil {
 				t.Error("expected error for oversized message")
 			}
@@ -373,11 +373,11 @@ func TestServer_ConcurrentRequestSecurity(t *testing.T) {
 			writer := bufio.NewWriter(&buf)
 
 			reqData, _ := json.Marshal(request)
-			server.processMessage(reqData, writer)
+			_ = server.processMessage(reqData, writer)
 			writer.Flush()
 
 			var response types.MCPResponse
-			json.Unmarshal(buf.Bytes(), &response)
+			_ = json.Unmarshal(buf.Bytes(), &response)
 
 			// Verify response has correct ID
 			if respID, ok := response.ID.(float64); !ok || int(respID) != id {

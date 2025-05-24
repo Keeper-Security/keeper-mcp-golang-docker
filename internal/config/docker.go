@@ -28,7 +28,7 @@ func LoadDockerSecrets() (*types.Profile, error) {
 
 	// Try to load token first
 	tokenPath := filepath.Join(DockerSecretsPath, TokenSecretName)
-	if tokenData, err := os.ReadFile(tokenPath); err == nil { // #nosec G304 - Docker secret path
+	if tokenData, err := os.ReadFile(tokenPath); err == nil { // #nosec G304 -- Docker secret path is a controlled environment variable
 		token := strings.TrimSpace(string(tokenData))
 		if token != "" {
 			profile := &types.Profile{
@@ -43,7 +43,7 @@ func LoadDockerSecrets() (*types.Profile, error) {
 
 	// Try to load config file
 	configPath := filepath.Join(DockerSecretsPath, ConfigSecretName)
-	if configData, err := os.ReadFile(configPath); err == nil { // #nosec G304 - Docker secret path
+	if configData, err := os.ReadFile(configPath); err == nil { // #nosec G304 -- Docker secret path is a controlled environment variable
 		// Try to parse as JSON first
 		var config map[string]interface{}
 		if err := json.Unmarshal(configData, &config); err == nil {
@@ -97,7 +97,7 @@ func LoadDockerSecrets() (*types.Profile, error) {
 // LoadMasterPasswordFromSecret loads the master password from Docker secret
 func LoadMasterPasswordFromSecret() (string, error) {
 	passwordPath := filepath.Join(DockerSecretsPath, MasterPasswordSecretName)
-	if passwordData, err := os.ReadFile(passwordPath); err == nil { // #nosec G304 - Docker secret path
+	if passwordData, err := os.ReadFile(passwordPath); err == nil { // #nosec G304 -- Docker secret path is a controlled environment variable
 		password := strings.TrimSpace(string(passwordData))
 		if password != "" {
 			return password, nil

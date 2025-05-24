@@ -3,7 +3,6 @@ package capture
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
@@ -151,7 +150,7 @@ func (dc *DataCapture) CaptureVault(client *ksm.SecretsManager) error {
 					continue
 				}
 
-				if err := ioutil.WriteFile(filePath, fileData, 0600); err != nil {
+				if err := os.WriteFile(filePath, fileData, 0600); err != nil {
 					fmt.Printf("    Error saving file: %v\n", err)
 					continue
 				}
@@ -176,7 +175,7 @@ func (dc *DataCapture) CaptureVault(client *ksm.SecretsManager) error {
 		return fmt.Errorf("failed to marshal captured data: %w", err)
 	}
 
-	if err := ioutil.WriteFile(fixtureFile, data, 0600); err != nil {
+	if err := os.WriteFile(fixtureFile, data, 0600); err != nil {
 		return fmt.Errorf("failed to write fixture file: %w", err)
 	}
 
@@ -209,7 +208,7 @@ Records by Type:
 		summary += fmt.Sprintf("- %s: %d\n", recordType, count)
 	}
 
-	if err := ioutil.WriteFile(summaryFile, []byte(summary), 0600); err != nil {
+	if err := os.WriteFile(summaryFile, []byte(summary), 0600); err != nil {
 		fmt.Printf("Warning: Failed to write summary file: %v\n", err)
 	}
 
@@ -247,7 +246,7 @@ func sanitizeFileName(name string) string {
 func LoadFixtures(fixtureFile string) (*CapturedData, error) {
 	// Clean and validate the path
 	cleanPath := filepath.Clean(fixtureFile)
-	data, err := ioutil.ReadFile(cleanPath) // #nosec G304 - test utility, path is cleaned
+	data, err := os.ReadFile(cleanPath) // #nosec G304 - test utility, path is cleaned
 	if err != nil {
 		return nil, fmt.Errorf("failed to read fixture file: %w", err)
 	}

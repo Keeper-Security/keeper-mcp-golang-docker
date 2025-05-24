@@ -43,10 +43,16 @@ type ProfilesDatabase struct {
 
 // NewProfileStore creates a new profile store
 func NewProfileStore(configDir string) *ProfileStore {
-	return &ProfileStore{
+	store := &ProfileStore{
 		configDir: configDir,
 		profiles:  make(map[string]*types.Profile),
 	}
+
+	// Initialize with a default encryptor using a generated password
+	defaultPassword, _ := crypto.GeneratePassword(32)
+	store.encryptor = crypto.NewEncryptor(defaultPassword)
+
+	return store
 }
 
 // NewProfileStoreWithPassword creates a new profile store with a specific password
@@ -67,37 +73,6 @@ func NewProfileStoreWithPassword(configDir string, password string) (*ProfileSto
 	}
 
 	return store, nil
-}
-
-// initializeMasterKey initializes or loads the master encryption key
-func (ps *ProfileStore) initializeMasterKey() error {
-	keyPath := filepath.Join(ps.configDir, MasterKeyFileName)
-
-	// Check if master key exists
-	if _, err := os.Stat(keyPath); os.IsNotExist(err) {
-		// Generate new master key
-		masterKey, err := crypto.GeneratePassword(64)
-		if err != nil {
-			return fmt.Errorf("failed to generate master key: %w", err)
-		}
-
-		// Save master key to file with restricted permissions
-		if err := os.WriteFile(keyPath, []byte(masterKey), 0600); err != nil {
-			return fmt.Errorf("failed to save master key: %w", err)
-		}
-
-		ps.encryptor = crypto.NewEncryptor(masterKey)
-		return nil
-	}
-
-	// Load existing master key
-	keyData, err := os.ReadFile(keyPath) // #nosec G304 - path constructed from validated configDir
-	if err != nil {
-		return fmt.Errorf("failed to read master key: %w", err)
-	}
-
-	ps.encryptor = crypto.NewEncryptor(string(keyData))
-	return nil
 }
 
 // CreateProfile creates a new profile with the given configuration

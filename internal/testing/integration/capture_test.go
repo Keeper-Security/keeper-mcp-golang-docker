@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -43,7 +42,7 @@ func TestCaptureRealData(t *testing.T) {
 	}
 
 	// Read config file
-	configData, err := ioutil.ReadFile(configPath)
+	configData, err := os.ReadFile(configPath)
 	if err != nil {
 		t.Fatalf("Failed to read config file: %v", err)
 	}
@@ -95,20 +94,20 @@ func TestGenerateMockData(t *testing.T) {
 	// Generate large test files (couple of megs as requested)
 	largeConfigData := generateLargeConfigFile(2 * 1024 * 1024) // 2MB
 	largeConfigPath := filepath.Join(outputDir, "large_config.json")
-	if err := ioutil.WriteFile(largeConfigPath, largeConfigData, 0644); err != nil {
+	if err := os.WriteFile(largeConfigPath, largeConfigData, 0644); err != nil {
 		t.Fatalf("Failed to write large config file: %v", err)
 	}
 
 	largeSQLDump := generateSQLDump(3 * 1024 * 1024) // 3MB
 	sqlDumpPath := filepath.Join(outputDir, "database_dump.sql")
-	if err := ioutil.WriteFile(sqlDumpPath, largeSQLDump, 0644); err != nil {
+	if err := os.WriteFile(sqlDumpPath, largeSQLDump, 0644); err != nil {
 		t.Fatalf("Failed to write SQL dump file: %v", err)
 	}
 
 	// Generate binary test file
 	binaryData := generateBinaryFile(1 * 1024 * 1024) // 1MB
 	binaryPath := filepath.Join(outputDir, "test_binary.dat")
-	if err := ioutil.WriteFile(binaryPath, binaryData, 0644); err != nil {
+	if err := os.WriteFile(binaryPath, binaryData, 0644); err != nil {
 		t.Fatalf("Failed to write binary file: %v", err)
 	}
 

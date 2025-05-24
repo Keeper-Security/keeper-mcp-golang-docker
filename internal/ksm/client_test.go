@@ -8,33 +8,6 @@ import (
 	"github.com/keeper-security/ksm-mcp/pkg/types"
 )
 
-// Mock types for testing
-type mockSecretsManager struct {
-	records     map[string]*mockRecord
-	shouldFail  bool
-	failMessage string
-}
-
-type mockRecord struct {
-	uid      string
-	title    string
-	recType  string
-	login    string
-	password string
-	url      string
-	notes    string
-	folder   string
-}
-
-func (m *mockRecord) UID() string       { return m.uid }
-func (m *mockRecord) Title() string     { return m.title }
-func (m *mockRecord) Type() string      { return m.recType }
-func (m *mockRecord) Login() string     { return m.login }
-func (m *mockRecord) Password() string  { return m.password }
-func (m *mockRecord) URL() string       { return m.url }
-func (m *mockRecord) Notes() string     { return m.notes }
-func (m *mockRecord) FolderUID() string { return m.folder }
-
 func TestMaskValue(t *testing.T) {
 	tests := []struct {
 		name     string

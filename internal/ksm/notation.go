@@ -11,7 +11,6 @@ import (
 
 var (
 	// Notation patterns
-	uidPattern    = regexp.MustCompile(`^([a-zA-Z0-9_-]{16,32})/(.+)$`)
 	arrayPattern  = regexp.MustCompile(`^(.+)\[(\d+)\]$`)
 	propPattern   = regexp.MustCompile(`^(.+)\[([a-zA-Z_]\w*)\]$`)
 	nestedPattern = regexp.MustCompile(`^(.+)\[(\d+)\]\[([a-zA-Z_]\w*)\]$`)

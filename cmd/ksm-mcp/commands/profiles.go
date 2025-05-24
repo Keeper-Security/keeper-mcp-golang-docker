@@ -299,7 +299,7 @@ func runProfilesShow(cmd *cobra.Command, args []string) error {
 	}
 
 	// Show KSM config details (without sensitive data)
-	if profile.Config != nil && len(profile.Config) > 0 {
+	if len(profile.Config) > 0 {
 		fmt.Println("\nKSM Configuration:")
 		if clientId, ok := profile.Config["clientId"]; ok {
 			fmt.Printf("  Client ID: %s\n", clientId)

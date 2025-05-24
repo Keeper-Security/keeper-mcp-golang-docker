@@ -339,7 +339,7 @@ func (l *Logger) performMaintenance() {
 		}
 
 		name := entry.Name()
-		if !filepath.HasPrefix(name, base) {
+		if !strings.HasPrefix(name, base) {
 			continue
 		}
 
