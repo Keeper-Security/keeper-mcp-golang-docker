@@ -248,25 +248,25 @@ jobs:
 
     - name: Run E2E tests
       run: |
-        # Start services
-        docker-compose up -d
+        # Start services using docker compose (v2)
+        docker compose up -d
         
         # Wait for services to be ready
         sleep 10
         
         # Check if service is running
-        docker-compose ps
+        docker compose ps
         
         # Run E2E tests
-        docker-compose exec -T ksm-mcp ksm-mcp test --run-tests --mode e2e || true
+        docker compose exec -T ksm-mcp ksm-mcp test --run-tests --mode e2e || true
         
         # Show logs if tests fail
-        docker-compose logs
+        docker compose logs
 
     - name: Collect logs
       if: always()
       run: |
-        docker-compose logs > docker-compose.log || true
+        docker compose logs > docker-compose.log || true
         
     - name: Upload logs
       if: always()
@@ -278,5 +278,5 @@ jobs:
     - name: Cleanup
       if: always()
       run: |
-        docker-compose down -v || true
+        docker compose down -v || true
 
