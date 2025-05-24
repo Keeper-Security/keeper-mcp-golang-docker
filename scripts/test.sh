@@ -124,6 +124,13 @@ if [ $? -eq 0 ]; then
                 echo "To use captured data in offline tests:"
                 echo "  export KSM_USE_FIXTURES=true"
             fi
+            
+            # Run docker-entrypoint.sh tests if in integration mode
+            if [ -f "./scripts/test-docker-entrypoint.sh" ]; then
+                echo ""
+                echo -e "${BLUE}Running docker-entrypoint.sh tests...${NC}"
+                ./scripts/test-docker-entrypoint.sh
+            fi
             ;;
         e2e)
             echo ""

@@ -5,6 +5,13 @@ All notable changes to the KSM MCP project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] - 2025-05-24
+
+### Fixed
+- Claude Desktop "Unexpected token 'A', 'Auto-init'... is not valid JSON" error
+- Docker entrypoint now redirects all auto-initialization output to stderr in batch mode
+- Prevents non-JSON output from breaking MCP communication
+
 ## [1.0.1] - 2025-05-24
 
 ### Added
