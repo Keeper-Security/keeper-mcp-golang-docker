@@ -11,10 +11,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/yourusername/ksm-mcp/internal/mcp"
-	"github.com/yourusername/ksm-mcp/internal/storage"
-	"github.com/yourusername/ksm-mcp/internal/testing/mock"
-	"github.com/yourusername/ksm-mcp/internal/ui"
+	"github.com/keeper-security/ksm-mcp/internal/mcp"
+	"github.com/keeper-security/ksm-mcp/internal/storage"
+	"github.com/keeper-security/ksm-mcp/internal/testing/mock"
+	"github.com/keeper-security/ksm-mcp/internal/ui"
 )
 
 type TestHarness struct {

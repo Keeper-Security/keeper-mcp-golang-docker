@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	ksm "github.com/keeper-security/secrets-manager-go/core"
-	"github.com/yourusername/ksm-mcp/internal/testing/capture"
+	"github.com/keeper-security/ksm-mcp/internal/testing/capture"
 )
 
 var (
