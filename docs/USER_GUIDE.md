@@ -20,41 +20,57 @@ Before you begin, ensure you have:
 1. **Keeper Secrets Manager Account**
    - Active KSM subscription
    - API access enabled
-   - One-time access token
+   - Base64 configuration string from KSM portal
 
 2. **System Requirements**
    - macOS, Linux, or Windows
-   - Go 1.21+ (for building from source)
+   - Docker (optional but recommended)
    - 50MB free disk space
    - Terminal access
 
 ### Installation
 
-#### Option 1: Download Binary (Recommended)
+#### Option 1: Docker (Easiest - Recommended)
 
 ```bash
-# macOS
-curl -LO https://github.com/keeper-security/ksm-mcp/releases/latest/download/ksm-mcp-darwin-amd64
-chmod +x ksm-mcp-darwin-amd64
+# Pull the Docker image
+docker pull keepersecurityinc/ksm-mcp-poc:latest
+
+# Test installation
+docker run --rm keepersecurityinc/ksm-mcp-poc:latest --version
+```
+
+#### Option 2: Download Binary
+
+```bash
+# macOS (Intel)
+curl -LO https://github.com/Keeper-Security/ksm-mcp/releases/latest/download/ksm-mcp-darwin-amd64.tar.gz
+tar -xzf ksm-mcp-darwin-amd64.tar.gz
 sudo mv ksm-mcp-darwin-amd64 /usr/local/bin/ksm-mcp
 
+# macOS (Apple Silicon)
+curl -LO https://github.com/Keeper-Security/ksm-mcp/releases/latest/download/ksm-mcp-darwin-arm64.tar.gz
+tar -xzf ksm-mcp-darwin-arm64.tar.gz
+sudo mv ksm-mcp-darwin-arm64 /usr/local/bin/ksm-mcp
+
 # Linux
-curl -LO https://github.com/keeper-security/ksm-mcp/releases/latest/download/ksm-mcp-linux-amd64
-chmod +x ksm-mcp-linux-amd64
+curl -LO https://github.com/Keeper-Security/ksm-mcp/releases/latest/download/ksm-mcp-linux-amd64.tar.gz
+tar -xzf ksm-mcp-linux-amd64.tar.gz
 sudo mv ksm-mcp-linux-amd64 /usr/local/bin/ksm-mcp
 
 # Windows
-# Download ksm-mcp-windows-amd64.exe from releases
-# Add to PATH or move to C:\Windows\System32
+# Download ksm-mcp-windows-amd64.zip from:
+# https://github.com/Keeper-Security/ksm-mcp/releases/latest
+# Extract and add to PATH
 ```
 
-#### Option 2: Build from Source
+#### Option 3: Build from Source
 
 ```bash
-git clone https://github.com/keeper-security/ksm-mcp.git
+git clone https://github.com/Keeper-Security/ksm-mcp.git
 cd ksm-mcp
-go build -o ksm-mcp cmd/ksm-mcp/main.go
-sudo mv ksm-mcp /usr/local/bin/
+make build
+sudo mv bin/ksm-mcp /usr/local/bin/
 ```
 
 ### Verify Installation
@@ -66,37 +82,71 @@ ksm-mcp --version
 
 ## Profile Setup
 
-### Getting a One-Time Token
+### Quick Setup (Recommended for Getting Started)
 
-1. Log into Keeper Secrets Manager
+#### Step 1: Get Your Base64 Configuration
+
+1. Log into [Keeper Secrets Manager Portal](https://keepersecurity.com/secrets-manager/)
 2. Navigate to Applications
-3. Create a new application
-4. Select "One-Time Access Token"
-5. Set permissions (read/write as needed)
-6. Generate token (format: `US:BASE64_TOKEN_DATA`)
+3. Create a new application or select existing
+4. Generate a One-Time Token
+5. Copy the **base64 configuration string** (starts with `ewog...`)
 
-### Creating Your First Profile
+#### Step 2: Initialize KSM MCP
 
+**Using Docker:**
 ```bash
-# Initialize profile with one-time token
-ksm-mcp init --profile mycompany --token "US:YOUR_ONE_TIME_TOKEN"
-
-# You'll be prompted to create a master password
-Enter master password: ********
-Confirm master password: ********
+# Initialize with base64 config (no master password for quick start)
+docker run -it --rm \
+  -v ~/.keeper/ksm-mcp:/home/ksm/.keeper/ksm-mcp \
+  keepersecurityinc/ksm-mcp-poc:latest \
+  init --config "YOUR_BASE64_CONFIG_STRING" --no-master-password
 
 # Output:
 ✓ Successfully initialized KSM configuration
-✓ Testing connection to Keeper Secrets Manager... (found 42 secrets)
-✓ Profile 'mycompany' initialized successfully!
+✓ Testing connection... Connected to Keeper Secrets Manager (42 secrets found)
+✓ Profile 'default' created successfully
 ```
 
-### Using Existing KSM Configuration
-
-If you already have a KSM config file:
-
+**Using Binary:**
 ```bash
-ksm-mcp init --profile existing --config ~/keeper/config.json
+# Initialize with base64 config
+ksm-mcp init --config "YOUR_BASE64_CONFIG_STRING" --no-master-password
+```
+
+> **Note**: The `--no-master-password` flag skips master password setup for faster onboarding. For production use, omit this flag to add password protection.
+
+### Production Setup (More Secure)
+
+For production environments, use these more secure options:
+
+#### Option 1: File-Based Configuration
+```bash
+# Save your KSM config to a file
+echo '{"clientId":"...","privateKey":"..."}' > ~/keeper/ksm-config.json
+
+# Initialize with file
+ksm-mcp init --config ~/keeper/ksm-config.json
+```
+
+#### Option 2: With Master Password
+```bash
+# Initialize with master password protection
+ksm-mcp init --config "BASE64_CONFIG_STRING"
+
+# You'll be prompted:
+Enter master password: ********
+Confirm master password: ********
+```
+
+#### Option 3: Multiple Profiles
+```bash
+# Create profiles for different environments
+ksm-mcp init --profile production --config "PROD_CONFIG"
+ksm-mcp init --profile development --config "DEV_CONFIG"
+
+# Set default profile
+ksm-mcp profiles set-default production
 ```
 
 ### Managing Multiple Profiles
@@ -122,22 +172,68 @@ ksm-mcp profiles delete staging
 
 ## Running the Server
 
-### Basic Usage
+### Quick Start
 
+**Using Docker:**
+```bash
+# Run the server (after initialization)
+docker run -it --rm \
+  -v ~/.keeper/ksm-mcp:/home/ksm/.keeper/ksm-mcp \
+  keepersecurityinc/ksm-mcp-poc:latest serve
+```
+
+**Using Binary:**
 ```bash
 # Start with default profile
 ksm-mcp serve
-
-# Start with specific profile
-ksm-mcp serve --profile production
 ```
+
+### Claude Desktop Integration
+
+1. **Find your config file location:**
+   - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+   - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+   - Linux: `~/.config/Claude/claude_desktop_config.json`
+
+2. **Add KSM MCP configuration:**
+
+   **For Docker users:**
+   ```json
+   {
+     "mcpServers": {
+       "ksm": {
+         "command": "docker",
+         "args": [
+           "run", "-i", "--rm",
+           "-v", "~/.keeper/ksm-mcp:/home/ksm/.keeper/ksm-mcp",
+           "keepersecurityinc/ksm-mcp-poc:latest",
+           "serve"
+         ]
+       }
+     }
+   }
+   ```
+
+   **For binary users:**
+   ```json
+   {
+     "mcpServers": {
+       "ksm": {
+         "command": "/usr/local/bin/ksm-mcp",
+         "args": ["serve"]
+       }
+     }
+   }
+   ```
+
+3. **Restart Claude Desktop** to load the new configuration
 
 ### Server Modes
 
 #### Interactive Mode (Default)
-- Prompts for confirmations
+- Prompts for confirmations on sensitive operations
 - Shows operation details
-- Best for development
+- Best for development and testing
 
 ```bash
 ksm-mcp serve

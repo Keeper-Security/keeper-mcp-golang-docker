@@ -1,8 +1,10 @@
-# KSM MCP Deployment Guide
+# KSM MCP Production Deployment Guide
 
 ## Overview
 
-This guide covers various deployment options for the KSM MCP server, including Docker, Docker Compose, Kubernetes, and standalone deployments.
+This guide covers production-ready deployment options for the KSM MCP server. While the [Quick Start Guide](../README.md) uses base64 configuration for easy setup, production environments require more secure approaches.
+
+> **Important**: The base64 configuration method shown in the Quick Start is perfect for getting started and testing. For production deployments, follow the secure practices outlined in this guide.
 
 ## Table of Contents
 
@@ -15,54 +17,86 @@ This guide covers various deployment options for the KSM MCP server, including D
 - [Monitoring and Logging](#monitoring-and-logging)
 - [Troubleshooting](#troubleshooting)
 
+## Transitioning from Quick Start to Production
+
+If you followed the Quick Start guide with base64 configuration, here's how to transition to a production setup:
+
+1. **Extract your configuration** from base64 to a file:
+   ```bash
+   echo "YOUR_BASE64_CONFIG" | base64 -d > ksm-config.json
+   ```
+
+2. **Add master password protection** to your existing profile:
+   ```bash
+   ksm-mcp profiles update --add-master-password
+   ```
+
+3. **Move configuration** to secure locations:
+   ```bash
+   sudo mkdir -p /etc/ksm-mcp
+   sudo mv ksm-config.json /etc/ksm-mcp/
+   sudo chmod 600 /etc/ksm-mcp/ksm-config.json
+   ```
+
+4. **Switch to file-based configuration** in your deployment
+
 ## Prerequisites
 
 - Docker 20.10+ (for containerized deployments)
 - Docker Compose 2.0+ (for multi-container deployments)
-- Go 1.21+ (for building from source)
-- Valid KSM credentials (one-time token or config file)
+- Valid KSM credentials (base64 config or JSON file)
+- Access to `keepersecurityinc/ksm-mcp-poc` Docker Hub registry
 
 ## Docker Deployment
 
-### Quick Start
+### Quick Start with Base64 Config
 
-1. **Pull the image** (or build locally):
+For testing and development, you can use the base64 configuration:
+
 ```bash
-# Build locally
-docker build -t keeper-mcp:latest .
+# Pull the official image
+docker pull keepersecurityinc/ksm-mcp-poc:latest
 
-# Or pull from registry (when available)
-# docker pull keeper/ksm-mcp:latest
+# Initialize with base64 config
+docker run -it --rm \
+  -v ~/.keeper/ksm-mcp:/home/ksm/.keeper/ksm-mcp \
+  keepersecurityinc/ksm-mcp-poc:latest \
+  init --config "YOUR_BASE64_CONFIG_STRING"
+
+# Run the server
+docker run -it --rm \
+  -v ~/.keeper/ksm-mcp:/home/ksm/.keeper/ksm-mcp \
+  keepersecurityinc/ksm-mcp-poc:latest serve
 ```
 
-2. **Create secrets**:
+### Production Setup with File-Based Config
+
+For production, use file-based configuration:
+
+1. **Create secure configuration**:
 ```bash
 # Create directories
-mkdir -p secrets config logs
+mkdir -p /etc/ksm-mcp/secrets /var/lib/ksm-mcp/config /var/log/ksm-mcp
 
-# Add your KSM token
-echo "YOUR_KSM_TOKEN" > secrets/ksm_token.txt
+# Convert base64 config to JSON file (more secure)
+echo "YOUR_BASE64_CONFIG" | base64 -d > /etc/ksm-mcp/secrets/ksm_config.json
+chmod 600 /etc/ksm-mcp/secrets/ksm_config.json
 
-# Or add your config file
-cp /path/to/config.json secrets/ksm_config.json
-
-# Optional: Add master password
-echo "YOUR_MASTER_PASSWORD" > secrets/master_password.txt
+# Create master password file
+echo "YOUR_SECURE_MASTER_PASSWORD" > /etc/ksm-mcp/secrets/master_password.txt
+chmod 600 /etc/ksm-mcp/secrets/master_password.txt
 ```
 
-3. **Run the container**:
+2. **Initialize the profile**:
 ```bash
 docker run -it --rm \
-  -v $(pwd)/config:/home/keeper/.keeper/ksm-mcp \
-  -v $(pwd)/logs:/var/log/ksm-mcp \
-  -v $(pwd)/secrets:/run/secrets:ro \
-  keeper-mcp:latest
+  -v /var/lib/ksm-mcp/config:/home/ksm/.keeper/ksm-mcp \
+  -v /etc/ksm-mcp/secrets:/run/secrets:ro \
+  keepersecurityinc/ksm-mcp-poc:latest \
+  init --config /run/secrets/ksm_config.json --master-password-file /run/secrets/master_password.txt
 ```
 
-### Production Docker Run
-
-For production, use more restrictive settings:
-
+3. **Run in production mode**:
 ```bash
 docker run -d \
   --name ksm-mcp \
@@ -72,28 +106,58 @@ docker run -d \
   --read-only \
   --security-opt no-new-privileges:true \
   --cap-drop ALL \
-  -v ksm-config:/home/keeper/.keeper/ksm-mcp \
-  -v ksm-logs:/var/log/ksm-mcp \
-  -v $(pwd)/secrets:/run/secrets:ro \
-  --health-cmd "ksm-mcp test --profile docker" \
+  -v /var/lib/ksm-mcp/config:/home/ksm/.keeper/ksm-mcp:ro \
+  -v /var/log/ksm-mcp:/var/log/ksm-mcp \
+  --health-cmd "ksm-mcp test" \
   --health-interval 30s \
-  keeper-mcp:latest serve --batch --log-level warn
+  keepersecurityinc/ksm-mcp-poc:latest serve --batch --log-level warn
 ```
+
+### Security Best Practices
+
+1. **Never use base64 config directly in production** - Convert to file
+2. **Use volume mounts** instead of environment variables
+3. **Enable master password** protection
+4. **Run as read-only** with minimal privileges
+5. **Use secrets management** for sensitive data
 
 ## Docker Compose Deployment
 
 ### Development Setup
 
-1. **Clone the repository**:
-```bash
-git clone https://github.com/keeper-security/ksm-mcp.git
-cd ksm-mcp
+1. **Create `docker-compose.yml`**:
+```yaml
+version: '3.8'
+
+services:
+  ksm-mcp:
+    image: keepersecurityinc/ksm-mcp-poc:latest
+    container_name: ksm-mcp
+    restart: unless-stopped
+    volumes:
+      - ksm-config:/home/ksm/.keeper/ksm-mcp
+      - ./logs:/var/log/ksm-mcp
+    environment:
+      - LOG_LEVEL=info
+    command: serve
+    healthcheck:
+      test: ["CMD", "ksm-mcp", "test"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  ksm-config:
 ```
 
-2. **Create secrets**:
+2. **Initialize before first run**:
 ```bash
-mkdir -p secrets
-echo "YOUR_KSM_TOKEN" > secrets/ksm_token.txt
+# Using base64 config (development)
+docker compose run --rm ksm-mcp init --config "YOUR_BASE64_CONFIG"
+
+# Or using config file (production)
+docker compose run --rm -v ./secrets:/run/secrets:ro ksm-mcp \
+  init --config /run/secrets/ksm_config.json
 ```
 
 3. **Start services**:

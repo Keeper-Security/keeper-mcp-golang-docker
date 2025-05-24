@@ -6,27 +6,27 @@ version: '3.8'
 services:
   # Basic setup with local config
   ksm-mcp-basic:
-    image: keeper/ksm-mcp:latest
+    image: keepersecurityinc/ksm-mcp-poc:latest
     container_name: ksm-mcp-basic
     environment:
       - KSM_MCP_PROFILE=default
       - KSM_MCP_LOG_LEVEL=info
     volumes:
-      - ./config:/home/keeper/.keeper/ksm-mcp
+      - ./config:/home/ksm/.keeper/ksm-mcp
     stdin_open: true
     tty: true
     restart: unless-stopped
 
   # Production setup with secrets
   ksm-mcp-production:
-    image: keeper/ksm-mcp:latest
+    image: keepersecurityinc/ksm-mcp-poc:latest
     container_name: ksm-mcp-prod
     environment:
       - KSM_MCP_PROFILE=production
       - KSM_MCP_LOG_LEVEL=warn
       - KSM_MCP_BATCH_MODE=true
     volumes:
-      - ksm-config:/home/keeper/.keeper/ksm-mcp
+      - ksm-config:/home/ksm/.keeper/ksm-mcp
       - ksm-logs:/var/log/ksm-mcp
     secrets:
       - ksm_token
@@ -51,7 +51,7 @@ services:
       - KSM_MCP_LOG_LEVEL=debug
       - KSM_MCP_ENV=development
     volumes:
-      - ./config:/home/keeper/.keeper/ksm-mcp
+      - ./config:/home/ksm/.keeper/ksm-mcp
       - ./logs:/var/log/ksm-mcp
       - ../:/workspace:ro  # Mount source for development
     stdin_open: true
@@ -62,14 +62,14 @@ services:
 
   # Integration with monitoring
   ksm-mcp-monitored:
-    image: keeper/ksm-mcp:latest
+    image: keepersecurityinc/ksm-mcp-poc:latest
     container_name: ksm-mcp-monitored
     environment:
       - KSM_MCP_PROFILE=production
       - KSM_MCP_METRICS_ENABLED=true
       - KSM_MCP_METRICS_PORT=9090
     volumes:
-      - ksm-config:/home/keeper/.keeper/ksm-mcp
+      - ksm-config:/home/ksm/.keeper/ksm-mcp
     ports:
       - "9090:9090"  # Metrics endpoint
     healthcheck:
