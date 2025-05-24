@@ -31,6 +31,10 @@ func Execute() error {
 }
 
 func init() {
+	// Configure cobra to use stderr for all output (important for MCP)
+	rootCmd.SetOut(os.Stderr)
+	rootCmd.SetErr(os.Stderr)
+	
 	// Global flags
 	rootCmd.PersistentFlags().StringVar(&configFile, "config", "", "config file (default is ~/.keeper/ksm-mcp/config.yaml)")
 	rootCmd.PersistentFlags().StringVar(&profile, "profile", "", "profile to use (overrides config default)")

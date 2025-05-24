@@ -46,6 +46,10 @@ Examples:
 
 func init() {
 	rootCmd.AddCommand(initCmd)
+	
+	// Ensure init command outputs to stderr (important for Docker entrypoint)
+	initCmd.SetOut(os.Stderr)
+	initCmd.SetErr(os.Stderr)
 
 	initCmd.Flags().StringVar(&initProfile, "profile", "", "profile name (required)")
 	initCmd.Flags().StringVar(&initToken, "token", "", "one-time token (US:TOKEN_HERE)")
@@ -103,7 +107,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	// Create storage with password if config has one
 	var store *storage.ProfileStore
 	if cfg.Security.MasterPasswordHash != "" {
-		fmt.Print("Enter master password: ")
+		fmt.Fprint(os.Stderr, "Enter master password: ")
 		password, err := readPassword()
 		if err != nil {
 			return fmt.Errorf("failed to read password: %w", err)
@@ -117,22 +121,22 @@ func runInit(cmd *cobra.Command, args []string) error {
 		// First time setup
 		if initNoMasterPassword {
 			// Create store without password
-			fmt.Println("⚠️  WARNING: Creating profile WITHOUT master password protection.")
-			fmt.Println("Your KSM credentials will be stored in plain text.")
-			fmt.Println("This is NOT RECOMMENDED for production use.")
+			fmt.Fprintln(os.Stderr, "⚠️  WARNING: Creating profile WITHOUT master password protection.")
+			fmt.Fprintln(os.Stderr, "Your KSM credentials will be stored in plain text.")
+			fmt.Fprintln(os.Stderr, "This is NOT RECOMMENDED for production use.")
 
 			store = storage.NewProfileStore(configDir)
 		} else {
 			// Prompt for master password
-			fmt.Println("First time setup - please create a master password.")
-			fmt.Println("This password will be used to encrypt all stored profiles.")
-			fmt.Print("Enter master password: ")
+			fmt.Fprintln(os.Stderr, "First time setup - please create a master password.")
+			fmt.Fprintln(os.Stderr, "This password will be used to encrypt all stored profiles.")
+			fmt.Fprint(os.Stderr, "Enter master password: ")
 			password, err := readPassword()
 			if err != nil {
 				return fmt.Errorf("failed to read password: %w", err)
 			}
 
-			fmt.Print("Confirm master password: ")
+			fmt.Fprint(os.Stderr, "Confirm master password: ")
 			confirm, err := readPassword()
 			if err != nil {
 				return fmt.Errorf("failed to read password: %w", err)
@@ -160,7 +164,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("profile '%s' already exists", initProfile)
 	}
 
-	fmt.Printf("Initializing profile '%s'...\n", initProfile)
+	fmt.Fprintf(os.Stderr, "Initializing profile '%s'...\n", initProfile)
 
 	var ksmConfig map[string]string
 
@@ -176,7 +180,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("failed to initialize with token: %w", err)
 		}
-		fmt.Println("✓ Successfully initialized KSM configuration")
+		fmt.Fprintln(os.Stderr, "✓ Successfully initialized KSM configuration")
 	} else {
 		// Determine if config is a file path or base64
 		var configData []byte
@@ -201,7 +205,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 			if err != nil {
 				return fmt.Errorf("failed to read config file: %w", err)
 			}
-			fmt.Println("✓ Successfully loaded KSM configuration from file")
+			fmt.Fprintln(os.Stderr, "✓ Successfully loaded KSM configuration from file")
 		} else {
 			// Assume it's base64-encoded
 			verboseLog("Loading base64-encoded KSM config")
@@ -209,7 +213,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 			if err != nil {
 				return fmt.Errorf("failed to decode base64 config: %w", err)
 			}
-			fmt.Println("✓ Successfully loaded KSM configuration from base64")
+			fmt.Fprintln(os.Stderr, "✓ Successfully loaded KSM configuration from base64")
 		}
 
 		ksmConfig, err = ksm.InitializeWithConfig(configData)
@@ -219,22 +223,22 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	// Test the connection
-	fmt.Print("Testing connection to Keeper Secrets Manager... ")
+	fmt.Fprint(os.Stderr, "Testing connection to Keeper Secrets Manager... ")
 	client, err := ksm.NewClient(&types.Profile{
 		Name:   initProfile,
 		Config: ksmConfig,
 	}, nil) // No logger for CLI
 	if err != nil {
-		fmt.Println("✗")
+		fmt.Fprintln(os.Stderr, "✗")
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 
 	secrets, err := client.ListSecrets("")
 	if err != nil {
-		fmt.Println("✗")
+		fmt.Fprintln(os.Stderr, "✗")
 		return fmt.Errorf("failed to connect to KSM: %w", err)
 	}
-	fmt.Printf("✓ (found %d secrets)\n", len(secrets))
+	fmt.Fprintf(os.Stderr, "✓ (found %d secrets)\n", len(secrets))
 
 	// Create and save profile
 	profile := &types.Profile{
@@ -252,12 +256,12 @@ func runInit(cmd *cobra.Command, args []string) error {
 		if err := cfg.SaveDefault(); err != nil {
 			return fmt.Errorf("failed to update default profile: %w", err)
 		}
-		fmt.Printf("✓ Set '%s' as default profile\n", initProfile)
+		fmt.Fprintf(os.Stderr, "✓ Set '%s' as default profile\n", initProfile)
 	}
 
-	fmt.Printf("\nProfile '%s' initialized successfully!\n", initProfile)
-	fmt.Println("\nTo start the MCP server, run:")
-	fmt.Printf("  ksm-mcp serve --profile %s\n", initProfile)
+	fmt.Fprintf(os.Stderr, "\nProfile '%s' initialized successfully!\n", initProfile)
+	fmt.Fprintln(os.Stderr, "\nTo start the MCP server, run:")
+	fmt.Fprintf(os.Stderr, "  ksm-mcp serve --profile %s\n", initProfile)
 
 	return nil
 }

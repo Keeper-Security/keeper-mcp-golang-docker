@@ -50,6 +50,10 @@ Examples:
 
 func init() {
 	rootCmd.AddCommand(serveCmd)
+	
+	// Ensure serve command outputs to stderr (important for MCP protocol)
+	serveCmd.SetOut(os.Stderr)
+	serveCmd.SetErr(os.Stderr)
 
 	serveCmd.Flags().BoolVar(&serveBatch, "batch", false, "enable batch mode (no interactive prompts)")
 	serveCmd.Flags().BoolVar(&serveAutoApprove, "auto-approve", false, "auto-approve all operations (dangerous)")
