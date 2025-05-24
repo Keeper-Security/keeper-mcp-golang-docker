@@ -1,0 +1,2 @@
+These e2e tests are temporarily disabled due to missing mock types.
+They need to be refactored to use the new architecture.

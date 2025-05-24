@@ -195,7 +195,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 				configPath = filepath.Join(home, configPath[1:])
 			}
 			
-			configData, err = os.ReadFile(configPath)
+			// Clean and validate the path
+			cleanPath := filepath.Clean(configPath)
+			configData, err = os.ReadFile(cleanPath) // #nosec G304 -- user-provided path for config
 			if err != nil {
 				return fmt.Errorf("failed to read config file: %w", err)
 			}

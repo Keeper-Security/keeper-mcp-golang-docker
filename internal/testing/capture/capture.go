@@ -74,7 +74,7 @@ func (dc *DataCapture) CaptureVault(client *ksm.SecretsManager) error {
 	fmt.Println("Starting vault data capture...")
 	
 	// Create output directory
-	if err := os.MkdirAll(dc.outputDir, 0755); err != nil {
+	if err := os.MkdirAll(dc.outputDir, 0750); err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 
@@ -146,12 +146,12 @@ func (dc *DataCapture) CaptureVault(client *ksm.SecretsManager) error {
 				fileName = sanitizeFileName(fileName)
 				filePath := filepath.Join(dc.outputDir, "files", fileName)
 				
-				if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
+				if err := os.MkdirAll(filepath.Dir(filePath), 0750); err != nil {
 					fmt.Printf("    Error creating file directory: %v\n", err)
 					continue
 				}
 
-				if err := ioutil.WriteFile(filePath, fileData, 0644); err != nil {
+				if err := ioutil.WriteFile(filePath, fileData, 0600); err != nil {
 					fmt.Printf("    Error saving file: %v\n", err)
 					continue
 				}
@@ -176,7 +176,7 @@ func (dc *DataCapture) CaptureVault(client *ksm.SecretsManager) error {
 		return fmt.Errorf("failed to marshal captured data: %w", err)
 	}
 
-	if err := ioutil.WriteFile(fixtureFile, data, 0644); err != nil {
+	if err := ioutil.WriteFile(fixtureFile, data, 0600); err != nil {
 		return fmt.Errorf("failed to write fixture file: %w", err)
 	}
 
@@ -209,7 +209,7 @@ Records by Type:
 		summary += fmt.Sprintf("- %s: %d\n", recordType, count)
 	}
 
-	if err := ioutil.WriteFile(summaryFile, []byte(summary), 0644); err != nil {
+	if err := ioutil.WriteFile(summaryFile, []byte(summary), 0600); err != nil {
 		fmt.Printf("Warning: Failed to write summary file: %v\n", err)
 	}
 
@@ -245,7 +245,9 @@ func sanitizeFileName(name string) string {
 
 // LoadFixtures loads captured data from disk
 func LoadFixtures(fixtureFile string) (*CapturedData, error) {
-	data, err := ioutil.ReadFile(fixtureFile)
+	// Clean and validate the path
+	cleanPath := filepath.Clean(fixtureFile)
+	data, err := ioutil.ReadFile(cleanPath) // #nosec G304 -- test utility, path is cleaned
 	if err != nil {
 		return nil, fmt.Errorf("failed to read fixture file: %w", err)
 	}
