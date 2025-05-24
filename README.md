@@ -74,8 +74,9 @@ Choose your preferred setup method:
 
 1. Log into [Keeper Secrets Manager Portal](https://keepersecurity.com/secrets-manager/)
 2. Create or select an application
-3. Generate a One-Time Token
-4. Copy the **base64-encoded configuration string** (starts with `ewog...`)
+3. Click "Add Device" button to create a new device
+4. Select the device type (e.g., "KSM MCP Local Test Capture Device")
+5. Copy the **base64-encoded configuration string** from the device (starts with `ewog...`)
 
 ## 🎯 Overview
 
