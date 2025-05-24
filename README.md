@@ -27,6 +27,7 @@ Choose your preferred setup method:
       "args": [
         "run", "-i", "--rm",
         "-e", "KSM_CONFIG_BASE64=YOUR_BASE64_CONFIG_STRING_HERE",
+        "-e", "KSM_MCP_PROFILE=production",
         "-e", "KSM_MCP_BATCH_MODE=true",
         "-e", "KSM_MCP_LOG_LEVEL=error",
         "-v", "ksm-mcp-data:/home/ksm/.keeper/ksm-mcp",
@@ -542,13 +543,17 @@ make build
 MCP ksm: Unexpected token 'A', "Auto-init"... is not valid JSON
 ```
 
-This happens when the server outputs non-JSON initialization messages. Fix by adding these environment variables:
-```json
-"-e", "KSM_MCP_BATCH_MODE=true",
-"-e", "KSM_MCP_LOG_LEVEL=error",
-```
-
-And ensure you have `"--stdio"` in the serve command.
+This happens when auto-initialization fails. Common causes:
+1. Missing profile name (error: "profile name 'default' is reserved")
+   - Fix: Add `"-e", "KSM_MCP_PROFILE=production"` to your config
+2. Server outputs non-JSON messages
+   - Fix: Add these environment variables:
+   ```json
+   "-e", "KSM_MCP_PROFILE=production",
+   "-e", "KSM_MCP_BATCH_MODE=true",
+   "-e", "KSM_MCP_LOG_LEVEL=error",
+   ```
+   - Ensure you have `"--stdio"` in the serve command
 
 **"Profile not found" error**
 ```bash
