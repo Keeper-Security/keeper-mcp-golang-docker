@@ -36,9 +36,9 @@ KSM MCP acts as a secure intermediary between AI agents and Keeper Secrets Manag
 
 ## 🚀 Quick Start (Under 2 Minutes)
 
-### Option 1: Claude Desktop + Docker Compose (Easiest)
+### Option 1: Claude Desktop + Docker (Single File!)
 
-1. **Create a single file** `claude_desktop_config.json`:
+1. **Edit your Claude Desktop config** `claude_desktop_config.json`:
    - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
    - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
    - Linux: `~/.config/Claude/claude_desktop_config.json`
@@ -48,32 +48,41 @@ KSM MCP acts as a secure intermediary between AI agents and Keeper Secrets Manag
   "mcpServers": {
     "ksm": {
       "command": "docker",
-      "args": ["compose", "-f", "/Users/YOUR_USERNAME/ksm-mcp/docker-compose.yml", "up"],
-      "env": {
-        "KSM_CONFIG_BASE64": "YOUR_BASE64_CONFIG_STRING_HERE"
-      }
+      "args": [
+        "run", "-i", "--rm",
+        "-e", "KSM_CONFIG_BASE64=YOUR_BASE64_CONFIG_STRING_HERE",
+        "-v", "ksm-mcp-data:/home/ksm/.keeper/ksm-mcp",
+        "keepersecurityinc/ksm-mcp-poc:latest",
+        "serve"
+      ]
     }
   }
 }
 ```
 
-2. **Create** `docker-compose.yml` (minimal, just 8 lines!):
+2. **Restart Claude Desktop** - That's it! No other files needed.
+
+> **Note**: Replace `YOUR_BASE64_CONFIG_STRING_HERE` with your actual base64 config from the KSM portal.
+
+### Option 2: Docker Compose (If you prefer compose)
+
+1. **Create** `docker-compose.yml` (minimal, just 8 lines!):
 ```yaml
 version: '3'
 services:
   ksm-mcp:
     image: keepersecurityinc/ksm-mcp-poc:latest
     environment:
-      - KSM_CONFIG_BASE64
+      - KSM_CONFIG_BASE64=YOUR_BASE64_CONFIG_STRING_HERE
     volumes:
       - ~/.keeper/ksm-mcp:/home/ksm/.keeper/ksm-mcp
     stdin_open: true
     tty: true
 ```
 
-3. **Restart Claude Desktop** - That's it! KSM MCP will auto-initialize on first run.
+2. **Run**: `docker-compose up`
 
-### Option 2: Docker (Manual)
+### Option 3: Docker (Manual Command)
 
 ```bash
 # Single command with auto-initialization
@@ -83,7 +92,7 @@ docker run -it --rm \
   keepersecurityinc/ksm-mcp-poc:latest serve
 ```
 
-### Option 3: Binary Installation
+### Option 4: Binary Installation
 
 ```bash
 # Download latest release (macOS/Linux)
@@ -99,7 +108,7 @@ chmod +x ksm-mcp
 ./ksm-mcp serve
 ```
 
-### Option 4: Build from Source
+### Option 5: Build from Source
 
 ```bash
 # Clone and build
