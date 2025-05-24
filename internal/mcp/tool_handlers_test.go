@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/keeper-security/ksm-mcp/internal/audit"
-	"github.com/keeper-security/ksm-mcp/internal/ksm"
 	"github.com/keeper-security/ksm-mcp/internal/ui"
 	"github.com/keeper-security/ksm-mcp/pkg/types"
 	"github.com/stretchr/testify/assert"
@@ -104,34 +103,25 @@ func (m *mockKSMClient) TestConnection() error {
 	return args.Error(0)
 }
 
-func (m *mockKSMClient) UpdateSecret(params types.UpdateSecretParams) error {
-	args := m.Called(params)
-	return args.Error(0)
-}
-
-func (m *mockKSMClient) DeleteSecret(uid string, permanent bool) error {
-	args := m.Called(uid, permanent)
-	return args.Error(0)
-}
-
-func (m *mockKSMClient) GeneratePassword(params types.GeneratePasswordParams) (string, error) {
-	args := m.Called(params)
-	return args.String(0), args.Error(1)
-}
-
 // Mock Confirmer
 type mockConfirmer struct {
 	mock.Mock
 }
 
-func (m *mockConfirmer) Confirm(ctx context.Context, message string) ui.ConfirmationResult {
+func (m *mockConfirmer) Confirm(ctx context.Context, message string) *ui.ConfirmationResult {
 	args := m.Called(ctx, message)
-	return args.Get(0).(ui.ConfirmationResult)
+	if args.Get(0) == nil {
+		return nil
+	}
+	return args.Get(0).(*ui.ConfirmationResult)
 }
 
-func (m *mockConfirmer) ConfirmSensitiveOperation(ctx context.Context, operation, resource string) ui.ConfirmationResult {
-	args := m.Called(ctx, operation, resource)
-	return args.Get(0).(ui.ConfirmationResult)
+func (m *mockConfirmer) ConfirmOperation(ctx context.Context, operation, resource string, details map[string]interface{}) *ui.ConfirmationResult {
+	args := m.Called(ctx, operation, resource, details)
+	if args.Get(0) == nil {
+		return nil
+	}
+	return args.Get(0).(*ui.ConfirmationResult)
 }
 
 // Test CREATE operation
@@ -150,7 +140,7 @@ func TestExecuteCreateSecret(t *testing.T) {
 			expectError: false,
 			mockSetup: func(client *mockKSMClient, confirmer *mockConfirmer) {
 				confirmer.On("Confirm", mock.Anything, "Create new secret 'Test Secret'?").
-					Return(ui.ConfirmationResult{Approved: true})
+					Return(&ui.ConfirmationResult{Approved: true})
 				client.On("CreateSecret", mock.MatchedBy(func(p types.CreateSecretParams) bool {
 					return p.Title == "Test Secret" && p.Type == "login"
 				})).Return("test-uid-123", nil)
@@ -163,7 +153,7 @@ func TestExecuteCreateSecret(t *testing.T) {
 			expectError: true,
 			mockSetup: func(client *mockKSMClient, confirmer *mockConfirmer) {
 				confirmer.On("Confirm", mock.Anything, "Create new secret 'Test Secret'?").
-					Return(ui.ConfirmationResult{Approved: false})
+					Return(&ui.ConfirmationResult{Approved: false})
 			},
 		},
 		{
@@ -179,7 +169,7 @@ func TestExecuteCreateSecret(t *testing.T) {
 			expectError: true,
 			mockSetup: func(client *mockKSMClient, confirmer *mockConfirmer) {
 				confirmer.On("Confirm", mock.Anything, "Create new secret 'Test Secret'?").
-					Return(ui.ConfirmationResult{Approved: true})
+					Return(&ui.ConfirmationResult{Approved: true})
 				client.On("CreateSecret", mock.Anything).Return("", errors.New("KSM error"))
 			},
 		},
@@ -196,7 +186,7 @@ func TestExecuteCreateSecret(t *testing.T) {
 			})
 			
 			server := &Server{
-				confirmer: &ui.Confirmer{},
+				confirmer: mockConfirmer,
 				logger:    logger,
 			}
 
@@ -325,7 +315,7 @@ func TestExecuteGetSecret(t *testing.T) {
 			expectError: false,
 			mockSetup: func(client *mockKSMClient, confirmer *mockConfirmer) {
 				confirmer.On("Confirm", mock.Anything, "Reveal unmasked secret test-uid?").
-					Return(ui.ConfirmationResult{Approved: true})
+					Return(&ui.ConfirmationResult{Approved: true})
 				client.On("GetSecret", "test-uid", []string(nil), true).Return(map[string]interface{}{
 					"uid":      "test-uid",
 					"title":    "Test Secret",
@@ -339,7 +329,7 @@ func TestExecuteGetSecret(t *testing.T) {
 			expectError: true,
 			mockSetup: func(client *mockKSMClient, confirmer *mockConfirmer) {
 				confirmer.On("Confirm", mock.Anything, "Reveal unmasked secret test-uid?").
-					Return(ui.ConfirmationResult{Approved: false})
+					Return(&ui.ConfirmationResult{Approved: false})
 			},
 		},
 	}
@@ -387,7 +377,7 @@ func TestExecuteUpdateSecret(t *testing.T) {
 			expectError: false,
 			mockSetup: func(client *mockKSMClient, confirmer *mockConfirmer) {
 				confirmer.On("Confirm", mock.Anything, "Update secret test-uid?").
-					Return(ui.ConfirmationResult{Approved: true})
+					Return(&ui.ConfirmationResult{Approved: true})
 				client.On("UpdateSecret", mock.MatchedBy(func(p types.UpdateSecretParams) bool {
 					return p.UID == "test-uid" && p.Title == "Updated Title"
 				})).Return(nil)
@@ -399,7 +389,7 @@ func TestExecuteUpdateSecret(t *testing.T) {
 			expectError: true,
 			mockSetup: func(client *mockKSMClient, confirmer *mockConfirmer) {
 				confirmer.On("Confirm", mock.Anything, "Update secret test-uid?").
-					Return(ui.ConfirmationResult{Approved: false})
+					Return(&ui.ConfirmationResult{Approved: false})
 			},
 		},
 		{
@@ -408,7 +398,7 @@ func TestExecuteUpdateSecret(t *testing.T) {
 			expectError: true,
 			mockSetup: func(client *mockKSMClient, confirmer *mockConfirmer) {
 				confirmer.On("Confirm", mock.Anything, "Update secret test-uid?").
-					Return(ui.ConfirmationResult{Approved: true})
+					Return(&ui.ConfirmationResult{Approved: true})
 				client.On("UpdateSecret", mock.Anything).Return(errors.New("update failed"))
 			},
 		},
@@ -459,9 +449,9 @@ func TestExecuteDeleteSecret(t *testing.T) {
 			expectError: false,
 			mockSetup: func(client *mockKSMClient, confirmer *mockConfirmer) {
 				confirmer.On("Confirm", mock.Anything, "Delete secret test-uid? This cannot be undone!").
-					Return(ui.ConfirmationResult{Approved: true})
+					Return(&ui.ConfirmationResult{Approved: true})
 				confirmer.On("Confirm", mock.Anything, "Are you absolutely sure? Type 'yes' to confirm deletion.").
-					Return(ui.ConfirmationResult{Approved: true})
+					Return(&ui.ConfirmationResult{Approved: true})
 				client.On("DeleteSecret", "test-uid", true).Return(nil)
 			},
 		},
@@ -471,7 +461,7 @@ func TestExecuteDeleteSecret(t *testing.T) {
 			expectError: true,
 			mockSetup: func(client *mockKSMClient, confirmer *mockConfirmer) {
 				confirmer.On("Confirm", mock.Anything, "Delete secret test-uid? This cannot be undone!").
-					Return(ui.ConfirmationResult{Approved: false})
+					Return(&ui.ConfirmationResult{Approved: false})
 			},
 		},
 		{
@@ -480,9 +470,9 @@ func TestExecuteDeleteSecret(t *testing.T) {
 			expectError: true,
 			mockSetup: func(client *mockKSMClient, confirmer *mockConfirmer) {
 				confirmer.On("Confirm", mock.Anything, "Delete secret test-uid? This cannot be undone!").
-					Return(ui.ConfirmationResult{Approved: true})
+					Return(&ui.ConfirmationResult{Approved: true})
 				confirmer.On("Confirm", mock.Anything, "Are you absolutely sure? Type 'yes' to confirm deletion.").
-					Return(ui.ConfirmationResult{Approved: false})
+					Return(&ui.ConfirmationResult{Approved: false})
 			},
 		},
 		{
@@ -491,7 +481,7 @@ func TestExecuteDeleteSecret(t *testing.T) {
 			expectError: true,
 			mockSetup: func(client *mockKSMClient, confirmer *mockConfirmer) {
 				confirmer.On("Confirm", mock.Anything, mock.Anything).
-					Return(ui.ConfirmationResult{Approved: true})
+					Return(&ui.ConfirmationResult{Approved: true})
 				client.On("DeleteSecret", "test-uid", true).Return(errors.New("delete failed"))
 			},
 		},

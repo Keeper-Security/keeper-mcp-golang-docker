@@ -1,6 +1,11 @@
 package mcp
 
-import "github.com/keeper-security/ksm-mcp/pkg/types"
+import (
+	"context"
+	
+	"github.com/keeper-security/ksm-mcp/internal/ui"
+	"github.com/keeper-security/ksm-mcp/pkg/types"
+)
 
 // KSMClient defines the interface for KSM operations
 type KSMClient interface {
@@ -29,4 +34,10 @@ type KSMClient interface {
 	
 	// Connection testing
 	TestConnection() error
+}
+
+// ConfirmerInterface defines the interface for confirmation operations
+type ConfirmerInterface interface {
+	Confirm(ctx context.Context, message string) *ui.ConfirmationResult
+	ConfirmOperation(ctx context.Context, operation, resource string, details map[string]interface{}) *ui.ConfirmationResult
 }

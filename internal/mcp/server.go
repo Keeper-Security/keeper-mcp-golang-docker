@@ -23,7 +23,7 @@ type Server struct {
 	profiles    map[string]KSMClient
 	currentProfile string
 	logger      *audit.Logger
-	confirmer   *ui.Confirmer
+	confirmer   ConfirmerInterface
 	options     *ServerOptions
 	mu          sync.RWMutex
 	
