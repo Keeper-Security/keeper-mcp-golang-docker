@@ -46,7 +46,8 @@ type ServerOptions struct {
 	AutoApprove bool
 	Timeout     time.Duration
 	ProfileName string
-	RateLimit   int // requests per minute
+	RateLimit   int    // requests per minute
+	Version     string // Server version
 }
 
 // NewServer creates a new MCP server
@@ -55,7 +56,11 @@ func NewServer(storage storage.ProfileStoreInterface, logger *audit.Logger, opti
 		options = &ServerOptions{
 			Timeout:   30 * time.Second,
 			RateLimit: 60,
+			Version:   "unknown", // Default version if not provided
 		}
+	}
+	if options.Version == "" { // Ensure version is not empty
+		options.Version = "unknown"
 	}
 
 	confirmConfig := types.Confirmation{

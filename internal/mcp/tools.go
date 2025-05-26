@@ -320,6 +320,11 @@ func (s *Server) getAvailableTools() []types.MCPTool {
 				"properties": map[string]interface{}{},
 			},
 		},
+		{
+			Name:        "get_server_version",
+			Description: "Get the current version of the KSM MCP server",
+			InputSchema: map[string]interface{}{"type": "object", "properties": map[string]interface{}{}},
+		},
 		// New tool for handling confirmed actions
 		{
 			Name:        "ksm_execute_confirmed_action",
@@ -397,7 +402,16 @@ func (s *Server) executeTool(toolName string, args json.RawMessage) (interface{}
 	case "create_folder":
 		return s.executeCreateFolder(client, args)
 	case "health_check":
+		// Health check doesn't strictly need a KSM client, but other tools might.
+		// We pass nil for now as handleHealthCheck might not use it.
+		// If other execute handlers require a client, this dispatch needs to fetch it.
 		return s.handleHealthCheck(context.Background(), args)
+	case "get_server_version":
+		// GetServerVersion does not need a KSM client.
+		// The executeGetServerVersion handler expects one for signature consistency.
+		// We can pass nil as it won't be used.
+		client, _ := s.getCurrentClient() // Get client, ignore error for this specific case or handle if critical
+		return s.executeGetServerVersion(client, args)
 	case "ksm_execute_confirmed_action":
 		return s.executeKsmExecuteConfirmedAction(args)
 

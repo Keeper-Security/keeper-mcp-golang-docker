@@ -529,6 +529,14 @@ func (s *Server) executeCreateFolder(client KSMClient, args json.RawMessage) (in
 	}, nil
 }
 
+// executeGetServerVersion handles the get_server_version tool
+func (s *Server) executeGetServerVersion(client KSMClient, args json.RawMessage) (interface{}, error) {
+	if s.options == nil || s.options.Version == "" {
+		return map[string]interface{}{"version": "unknown"}, nil
+	}
+	return map[string]interface{}{"version": s.options.Version}, nil
+}
+
 // Confirmed action handlers
 func (s *Server) executeCreateSecretConfirmed(client KSMClient, args json.RawMessage) (interface{}, error) {
 	var params types.CreateSecretParams

@@ -201,7 +201,8 @@ func runServe(cmd *cobra.Command, args []string) error {
 		AutoApprove: serveAutoApprove,
 		Timeout:     serveTimeout,
 		ProfileName: profileName,
-		RateLimit:   100, // requests per minute
+		RateLimit:   100,     // requests per minute
+		Version:     version, // Use the package-level version variable
 	}
 
 	server := mcp.NewServer(store, logger, serverOpts)
