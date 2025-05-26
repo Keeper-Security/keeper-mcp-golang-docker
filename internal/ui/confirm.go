@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"os"
@@ -31,6 +30,17 @@ func NewConfirmer(config types.Confirmation) *Confirmer {
 
 // Confirm prompts the user for confirmation with the given message
 func (c *Confirmer) Confirm(ctx context.Context, message string) *ConfirmationResult {
+	// Check if context is already cancelled
+	select {
+	case <-ctx.Done():
+		return &ConfirmationResult{
+			Approved: !c.config.DefaultDeny,
+			TimedOut: true,
+			Error:    nil,
+		}
+	default:
+	}
+
 	// In batch mode or with auto-approve, skip confirmation
 	if c.config.BatchMode || c.config.AutoApprove {
 		return &ConfirmationResult{
@@ -40,8 +50,13 @@ func (c *Confirmer) Confirm(ctx context.Context, message string) *ConfirmationRe
 		}
 	}
 
-	// Interactive confirmation
-	return c.promptUser(ctx, message)
+	// For non-batch/auto-approve modes, direct terminal confirmation is no longer supported
+	// for tool calls that should go through the MCP Prompt confirmation flow.
+	return &ConfirmationResult{
+		Approved: false,
+		TimedOut: false,
+		Error:    fmt.Errorf("interactive confirmation via terminal is not supported for this operation; use MCP prompts or batch/auto-approve modes"),
+	}
 }
 
 // ConfirmOperation prompts for confirmation of a specific operation
@@ -74,105 +89,6 @@ func (c *Confirmer) ConfirmSensitiveOperation(ctx context.Context, operation, re
 
 	confirmer := NewConfirmer(config)
 	return confirmer.Confirm(ctx, message)
-}
-
-// promptUser handles the interactive confirmation prompt
-func (c *Confirmer) promptUser(ctx context.Context, message string) *ConfirmationResult {
-	// Create a context with timeout if specified
-	var promptCtx context.Context
-	var cancel context.CancelFunc
-
-	if c.config.Timeout > 0 {
-		promptCtx, cancel = context.WithTimeout(ctx, c.config.Timeout)
-	} else {
-		promptCtx, cancel = context.WithCancel(ctx)
-	}
-	defer cancel()
-
-	// Channel to receive user input
-	responseChan := make(chan string, 1)
-	errorChan := make(chan error, 1)
-
-	// Start goroutine to read user input
-	go func() {
-		defer close(responseChan)
-		defer close(errorChan)
-
-		// Display the prompt
-		timeoutMsg := ""
-		if c.config.Timeout > 0 {
-			timeoutMsg = fmt.Sprintf(" (%v)", c.config.Timeout)
-		}
-
-		defaultHint := "[Y/n]"
-		if c.config.DefaultDeny {
-			defaultHint = "[y/N]"
-		}
-
-		fmt.Fprintf(os.Stderr, "%s %s%s ", message, defaultHint, timeoutMsg)
-
-		// Try to open /dev/tty for input if available (works even when stdin is used for MCP)
-		var reader *bufio.Reader
-		tty, err := os.Open("/dev/tty")
-		if err == nil {
-			// Successfully opened /dev/tty - use it for input
-			defer tty.Close()
-			reader = bufio.NewReader(tty)
-		} else {
-			// Check if we're running in MCP mode (stdin used for protocol)
-			// This is detected by checking if we can't open /dev/tty
-			if os.Getenv("KSM_MCP_MODE") == "stdio" || err != nil {
-				// We're in MCP mode without TTY - can't do interactive confirmations
-				errorChan <- fmt.Errorf(`interactive confirmation not available in MCP stdio mode
-
-To resolve this, you have several options:
-1. Enable batch mode: Add "-e", "KSM_MCP_BATCH_MODE=true" to your Docker config
-2. Run locally: Install ksm-mcp binary and run without Docker
-3. Use pre-approved operations: Add --auto-approve flag (DANGEROUS - use only for testing)
-
-Current operation requires confirmation: %s`, message)
-				return
-			}
-			// Fallback to stdin (for non-MCP interactive use)
-			reader = bufio.NewReader(os.Stdin)
-		}
-
-		// Read user input
-		response, err := reader.ReadString('\n')
-		if err != nil {
-			errorChan <- fmt.Errorf("failed to read user input: %w", err)
-			return
-		}
-
-		responseChan <- strings.TrimSpace(response)
-	}()
-
-	// Wait for user input or timeout
-	select {
-	case <-promptCtx.Done():
-		// Timeout or cancellation
-		fmt.Fprintln(os.Stderr, "\nTimeout - using default response")
-		return &ConfirmationResult{
-			Approved: !c.config.DefaultDeny,
-			TimedOut: true,
-			Error:    nil,
-		}
-
-	case err := <-errorChan:
-		return &ConfirmationResult{
-			Approved: false,
-			TimedOut: false,
-			Error:    err,
-		}
-
-	case response := <-responseChan:
-		approved := c.parseResponse(response)
-		return &ConfirmationResult{
-			Approved: approved,
-			TimedOut: false,
-			Error:    nil,
-		}
-	}
 }
 
 // parseResponse parses the user's response to determine approval

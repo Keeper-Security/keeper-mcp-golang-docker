@@ -68,7 +68,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	var dockerProfile *types.Profile
 	if config.IsRunningInDocker() {
 		// fmt.Fprintf(os.Stderr, "Running in Docker environment\n")
-		
+
 		// First try to load from Docker secrets
 		if prof, err := config.LoadDockerSecrets(); err == nil {
 			dockerProfile = prof
@@ -79,7 +79,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 				dockerProfile = prof
 				// fmt.Fprintf(os.Stderr, "Loaded configuration from KSM_CONFIG_BASE64\n")
 			} else {
-				// fmt.Fprintf(os.Stderr, "Warning: Failed to load KSM config from environment: %v\n", err)
+				// Failed to load KSM config from environment - logging disabled for MCP protocol
 			}
 		}
 	}
@@ -119,7 +119,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	// Determine which profile to use
 	profileName := profile // from global flag
 	useDirectConfig := false
-	
+
 	if profileName == "" && dockerProfile != nil {
 		// When running in Docker with KSM_CONFIG_BASE64, use direct config without profiles
 		useDirectConfig = true
@@ -136,15 +136,15 @@ func runServe(cmd *cobra.Command, args []string) error {
 	// fmt.Fprintf(os.Stderr, "Using profile: %s\n", profileName)
 
 	if serveBatch {
-		// fmt.Fprintf(os.Stderr, "Running in batch mode (no prompts)\n")
+		// Batch mode enabled - logging disabled for MCP protocol
 	}
 	if serveAutoApprove {
-		// fmt.Fprintf(os.Stderr, "⚠️  Auto-approve enabled - all operations will be automatically approved!\n")
+		// Auto-approve enabled - logging disabled for MCP protocol
 	}
 
 	// Create storage - handle Docker case specially
 	var store storage.ProfileStoreInterface
-	
+
 	if useDirectConfig && dockerProfile != nil {
 		// Create a simple in-memory store for Docker with direct config
 		store = &dockerProfileStore{
@@ -198,7 +198,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	if os.Getenv("KSM_MCP_BATCH_MODE") == "true" {
 		serveBatch = true
 	}
-	
+
 	// Create MCP server with options
 	serverOpts := &mcp.ServerOptions{
 		BatchMode:   serveBatch,
@@ -276,19 +276,18 @@ func loadProfileFromBase64(configBase64 string) (*types.Profile, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode base64 config: %w", err)
 	}
-	
+
 	// Initialize KSM config
 	ksmConfig, err := ksm.InitializeWithConfig(configData)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize KSM config: %w", err)
 	}
-	
+
 	// Create profile
 	profile := &types.Profile{
 		Name:   "docker",
 		Config: ksmConfig,
 	}
-	
+
 	return profile, nil
 }
-
