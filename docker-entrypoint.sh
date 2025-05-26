@@ -1,24 +1,34 @@
 #!/bin/sh
 set -e
 
-# Auto-initialize if KSM_CONFIG_BASE64 is provided and no profile exists
-if [ -n "$KSM_CONFIG_BASE64" ] && [ ! -f "$KSM_MCP_CONFIG_DIR/profiles.db" ]; then
-    # Only show messages if not in batch mode
+# Ensure config.yaml exists
+if [ ! -f "$KSM_MCP_CONFIG_DIR/config.yaml" ]; then
+    cp "$KSM_MCP_CONFIG_DIR/config.yaml.example" "$KSM_MCP_CONFIG_DIR/config.yaml" 2>/dev/null || true
+fi
+
+# Skip profile initialization when using direct config (no profile specified)
+if [ -n "$KSM_CONFIG_BASE64" ] && [ -z "$KSM_MCP_PROFILE" ]; then
     if [ "$KSM_MCP_BATCH_MODE" != "true" ]; then
-        echo "Auto-initializing KSM MCP with provided base64 config..." >&2
-    fi
-    
-    # Redirect init output to stderr if in batch mode
-    if [ "$KSM_MCP_BATCH_MODE" = "true" ]; then
-        ksm-mcp init --profile "${KSM_MCP_PROFILE:-default}" --no-master-password 2>&1 >&2
-    else
-        ksm-mcp init --profile "${KSM_MCP_PROFILE:-default}" --no-master-password
-    fi
-    
-    if [ "$KSM_MCP_BATCH_MODE" != "true" ]; then
-        echo "Initialization complete." >&2
+        echo "Using direct KSM configuration (no profile initialization needed)" >&2
     fi
 fi
 
+# Detect if we're running in MCP mode (serve command)
+case "$*" in
+    *serve*)
+        # Set MCP mode to stdio when running serve command in Docker
+        export KSM_MCP_MODE="stdio"
+        ;;
+esac
+
 # Execute the command
-exec "$@"
+# If the first argument doesn't start with ksm-mcp, prepend it
+case "$1" in
+    ksm-mcp*)
+        exec "$@"
+        ;;
+    *)
+        # Just prepend ksm-mcp, the environment variable KSM_MCP_CONFIG_DIR will be used
+        exec ksm-mcp "$@"
+        ;;
+esac

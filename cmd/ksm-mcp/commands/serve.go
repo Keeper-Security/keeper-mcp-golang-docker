@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"os"
 	"os/signal"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/keeper-security/ksm-mcp/internal/audit"
 	"github.com/keeper-security/ksm-mcp/internal/config"
+	"github.com/keeper-security/ksm-mcp/internal/ksm"
 	"github.com/keeper-security/ksm-mcp/internal/mcp"
 	"github.com/keeper-security/ksm-mcp/internal/storage"
 	"github.com/keeper-security/ksm-mcp/pkg/types"
@@ -62,13 +64,23 @@ func init() {
 }
 
 func runServe(cmd *cobra.Command, args []string) error {
-	// Check if running in Docker and load secrets if available
+	// Check if running in Docker and load configuration
 	var dockerProfile *types.Profile
 	if config.IsRunningInDocker() {
-		fmt.Fprintf(os.Stderr, "Running in Docker environment\n")
+		// fmt.Fprintf(os.Stderr, "Running in Docker environment\n")
+		
+		// First try to load from Docker secrets
 		if prof, err := config.LoadDockerSecrets(); err == nil {
 			dockerProfile = prof
-			fmt.Fprintf(os.Stderr, "Loaded configuration from Docker secrets\n")
+			// fmt.Fprintf(os.Stderr, "Loaded configuration from Docker secrets\n")
+		} else if configBase64 := os.Getenv("KSM_CONFIG_BASE64"); configBase64 != "" {
+			// Try environment variable
+			if prof, err := loadProfileFromBase64(configBase64); err == nil {
+				dockerProfile = prof
+				// fmt.Fprintf(os.Stderr, "Loaded configuration from KSM_CONFIG_BASE64\n")
+			} else {
+				// fmt.Fprintf(os.Stderr, "Warning: Failed to load KSM config from environment: %v\n", err)
+			}
 		}
 	}
 
@@ -83,7 +95,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	}
 
 	// Load config
-	cfg, err := config.Load(filepath.Join(configDir, "config.yaml"))
+	cfg, err := config.LoadOrCreate(filepath.Join(configDir, "config.yaml"))
 	if err != nil {
 		// If running in Docker with secrets, create minimal config
 		if dockerProfile != nil {
@@ -106,38 +118,48 @@ func runServe(cmd *cobra.Command, args []string) error {
 
 	// Determine which profile to use
 	profileName := profile // from global flag
-	if profileName == "" {
-		if dockerProfile != nil {
-			profileName = "docker"
-		} else {
-			profileName = cfg.Profiles.Default
-			if profileName == "" {
-				return fmt.Errorf("no profile specified and no default profile configured")
-			}
+	useDirectConfig := false
+	
+	if profileName == "" && dockerProfile != nil {
+		// When running in Docker with KSM_CONFIG_BASE64, use direct config without profiles
+		useDirectConfig = true
+		profileName = "docker" // Just for logging
+	} else if profileName == "" {
+		profileName = cfg.Profiles.Default
+		if profileName == "" {
+			return fmt.Errorf("no profile specified and no default profile configured")
 		}
 	}
 
 	// Log to stderr since stdout is used for MCP protocol
-	fmt.Fprintf(os.Stderr, "Starting KSM MCP server...\n")
-	fmt.Fprintf(os.Stderr, "Using profile: %s\n", profileName)
+	// fmt.Fprintf(os.Stderr, "Starting KSM MCP server...\n")
+	// fmt.Fprintf(os.Stderr, "Using profile: %s\n", profileName)
 
 	if serveBatch {
-		fmt.Fprintf(os.Stderr, "Running in batch mode (no prompts)\n")
+		// fmt.Fprintf(os.Stderr, "Running in batch mode (no prompts)\n")
 	}
 	if serveAutoApprove {
-		fmt.Fprintf(os.Stderr, "⚠️  Auto-approve enabled - all operations will be automatically approved!\n")
+		// fmt.Fprintf(os.Stderr, "⚠️  Auto-approve enabled - all operations will be automatically approved!\n")
 	}
 
-	// Create storage - prompt for password if needed
-	var store *storage.ProfileStore
-	if cfg.Security.MasterPasswordHash != "" {
+	// Create storage - handle Docker case specially
+	var store storage.ProfileStoreInterface
+	
+	if useDirectConfig && dockerProfile != nil {
+		// Create a simple in-memory store for Docker with direct config
+		store = &dockerProfileStore{
+			profile: dockerProfile,
+		}
+		// fmt.Fprintf(os.Stderr, "Using direct KSM configuration (no profile storage)\n")
+	} else if cfg.Security.MasterPasswordHash != "" {
+		// Handle master password case
 		var password string
 
 		// Try to load from Docker secret first
 		if config.IsRunningInDocker() {
 			if secretPassword, err := config.LoadMasterPasswordFromSecret(); err == nil {
 				password = secretPassword
-				fmt.Fprintf(os.Stderr, "Loaded master password from Docker secret\n")
+				// fmt.Fprintf(os.Stderr, "Loaded master password from Docker secret\n")
 			}
 		}
 
@@ -156,17 +178,8 @@ func runServe(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("failed to unlock profile store: %w", err)
 		}
 	} else {
+		// Regular profile store
 		store = storage.NewProfileStore(configDir)
-	}
-
-	// If using Docker profile, add it to the store
-	if dockerProfile != nil && profileName == "docker" {
-		if err := store.CreateProfile(dockerProfile.Name, dockerProfile.Config); err != nil {
-			// Profile might already exist, which is ok
-			if !store.ProfileExists(dockerProfile.Name) {
-				return fmt.Errorf("failed to save Docker profile: %w", err)
-			}
-		}
 	}
 
 	// Create audit logger
@@ -181,6 +194,11 @@ func runServe(cmd *cobra.Command, args []string) error {
 	}
 	defer logger.Close()
 
+	// Check environment variables for batch mode
+	if os.Getenv("KSM_MCP_BATCH_MODE") == "true" {
+		serveBatch = true
+	}
+	
 	// Create MCP server with options
 	serverOpts := &mcp.ServerOptions{
 		BatchMode:   serveBatch,
@@ -201,12 +219,12 @@ func runServe(cmd *cobra.Command, args []string) error {
 
 	go func() {
 		<-sigChan
-		fmt.Fprintf(os.Stderr, "\nShutting down server...\n")
+		// fmt.Fprintf(os.Stderr, "\nShutting down server...\n")
 		cancel()
 	}()
 
 	// Start the server
-	fmt.Fprintf(os.Stderr, "Server ready. Starting MCP server...\n")
+	// fmt.Fprintf(os.Stderr, "Server ready. Starting MCP server...\n")
 
 	// The server handles its own stdio reading/writing
 	if err := server.Start(ctx); err != nil {
@@ -215,3 +233,62 @@ func runServe(cmd *cobra.Command, args []string) error {
 
 	return nil
 }
+
+// dockerProfileStore is a simple in-memory profile store for Docker direct config
+type dockerProfileStore struct {
+	profile *types.Profile
+}
+
+func (d *dockerProfileStore) GetProfile(name string) (*types.Profile, error) {
+	if d.profile != nil && d.profile.Name == name {
+		return d.profile, nil
+	}
+	return nil, fmt.Errorf("profile '%s' not found", name)
+}
+
+func (d *dockerProfileStore) CreateProfile(name string, config map[string]string) error {
+	return fmt.Errorf("profile creation not supported in direct config mode")
+}
+
+func (d *dockerProfileStore) UpdateProfile(name string, config map[string]string) error {
+	return fmt.Errorf("profile updates not supported in direct config mode")
+}
+
+func (d *dockerProfileStore) DeleteProfile(name string) error {
+	return fmt.Errorf("profile deletion not supported in direct config mode")
+}
+
+func (d *dockerProfileStore) ListProfiles() []string {
+	if d.profile != nil {
+		return []string{d.profile.Name}
+	}
+	return []string{}
+}
+
+func (d *dockerProfileStore) ProfileExists(name string) bool {
+	return d.profile != nil && d.profile.Name == name
+}
+
+// loadProfileFromBase64 loads a profile from base64-encoded KSM config
+func loadProfileFromBase64(configBase64 string) (*types.Profile, error) {
+	// Decode base64
+	configData, err := base64.StdEncoding.DecodeString(configBase64)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode base64 config: %w", err)
+	}
+	
+	// Initialize KSM config
+	ksmConfig, err := ksm.InitializeWithConfig(configData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize KSM config: %w", err)
+	}
+	
+	// Create profile
+	profile := &types.Profile{
+		Name:   "docker",
+		Config: ksmConfig,
+	}
+	
+	return profile, nil
+}
+

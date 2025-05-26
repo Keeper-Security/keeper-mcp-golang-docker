@@ -36,10 +36,32 @@ tasks:
       - docker run --rm -e KSM_CONFIG_BASE64=dGVzdA== -e KSM_MCP_PROFILE=production -e KSM_MCP_BATCH_MODE=true {{.DOCKER_IMAGE}}:latest serve --batch 2>&1 | head -20 || true
 
   test-claude:
-    desc: Show Claude config
+    desc: Show Claude config for local testing
     cmds:
-      - echo "Claude Desktop config for {{.DOCKER_IMAGE}}:latest"
-      - echo "Replace YOUR_BASE64_CONFIG with your actual config"
+      - |
+        echo ""
+        echo "Add this to your Claude Desktop config:"
+        echo "~/Library/Application Support/Claude/claude_desktop_config.json"
+        echo ""
+        echo '{'
+        echo '  "mcpServers": {'
+        echo '    "ksm-local": {'
+        echo '      "command": "docker",'
+        echo '      "args": ['
+        echo '        "run", "-i", "--rm",'
+        echo '        "-e", "KSM_CONFIG_BASE64=YOUR_BASE64_CONFIG_HERE",'
+        echo '        "-e", "KSM_MCP_PROFILE=production",'
+        echo '        "-e", "KSM_MCP_BATCH_MODE=true",'
+        echo '        "-e", "KSM_MCP_LOG_LEVEL=error",'
+        echo '        "-v", "ksm-mcp-data:/home/ksm/.keeper/ksm-mcp",'
+        echo '        "{{.DOCKER_IMAGE}}:latest",'
+        echo '        "serve", "--stdio"'
+        echo '      ]'
+        echo '    }'
+        echo '  }'
+        echo '}'
+        echo ""
+        echo "Note: Replace YOUR_BASE64_CONFIG_HERE with your actual config"
 
   clean:
     desc: Clean artifacts

@@ -8,6 +8,9 @@ import (
 	"github.com/keeper-security/ksm-mcp/pkg/types"
 )
 
+// Ensure MemoryProfileStore implements ProfileStoreInterface
+var _ ProfileStoreInterface = (*MemoryProfileStore)(nil)
+
 // MemoryProfileStore is an in-memory implementation of profile storage for testing
 type MemoryProfileStore struct {
 	mu       sync.RWMutex
@@ -53,7 +56,7 @@ func (m *MemoryProfileStore) GetProfile(name string) (*types.Profile, error) {
 }
 
 // ListProfiles returns all profile names
-func (m *MemoryProfileStore) ListProfiles() ([]string, error) {
+func (m *MemoryProfileStore) ListProfiles() []string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -61,16 +64,51 @@ func (m *MemoryProfileStore) ListProfiles() ([]string, error) {
 	for name := range m.profiles {
 		names = append(names, name)
 	}
-	return names, nil
+	return names
 }
 
-// SaveProfile saves a profile to memory
-func (m *MemoryProfileStore) SaveProfile(profile *types.Profile) error {
+// CreateProfile creates a new profile with the given configuration
+func (m *MemoryProfileStore) CreateProfile(name string, config map[string]string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	m.profiles[profile.Name] = profile
+	if _, exists := m.profiles[name]; exists {
+		return fmt.Errorf("profile '%s' already exists", name)
+	}
+
+	profile := &types.Profile{
+		Name:      name,
+		Config:    config,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+
+	m.profiles[name] = profile
 	return nil
+}
+
+// UpdateProfile updates an existing profile
+func (m *MemoryProfileStore) UpdateProfile(name string, config map[string]string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	profile, exists := m.profiles[name]
+	if !exists {
+		return fmt.Errorf("profile '%s' not found", name)
+	}
+
+	profile.Config = config
+	profile.UpdatedAt = time.Now()
+	return nil
+}
+
+// ProfileExists checks if a profile exists
+func (m *MemoryProfileStore) ProfileExists(name string) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	_, exists := m.profiles[name]
+	return exists
 }
 
 // DeleteProfile removes a profile from memory

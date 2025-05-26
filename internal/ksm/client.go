@@ -125,16 +125,20 @@ func InitializeWithConfig(configData []byte) (map[string]string, error) {
 // ListSecrets returns metadata for all secrets
 func (c *Client) ListSecrets(folderUID string) ([]*types.SecretMetadata, error) {
 	// Log access attempt
-	c.logger.LogAccess("secrets", "list", "", c.profile, true, map[string]interface{}{
-		"folder": folderUID,
-	})
+	if c.logger != nil {
+		c.logger.LogAccess("secrets", "list", "", c.profile, true, map[string]interface{}{
+			"folder": folderUID,
+		})
+	}
 
 	// Get all secrets
 	records, err := c.sm.GetSecrets([]string{})
 	if err != nil {
-		c.logger.LogError("ksm", err, map[string]interface{}{
-			"operation": "list_secrets",
-		})
+		if c.logger != nil {
+			c.logger.LogError("ksm", err, map[string]interface{}{
+				"operation": "list_secrets",
+			})
+		}
 		return nil, fmt.Errorf("failed to list secrets: %w", err)
 	}
 
@@ -184,6 +188,7 @@ func (c *Client) GetSecret(uid string, fields []string, unmask bool) (map[string
 		return nil, errors.New("secret not found")
 	}
 
+	// Handle duplicates - just use the first one since they're the same record
 	record := records[0]
 	result := make(map[string]interface{})
 
@@ -205,11 +210,21 @@ func (c *Client) GetSecret(uid string, fields []string, unmask bool) (map[string
 				result["login"] = values[0]
 			}
 		case "password":
+			// First try the standard Password() method
 			if password := record.Password(); password != "" {
 				if unmask {
 					result["password"] = password
 				} else {
 					result["password"] = maskValue(password)
+				}
+			} else {
+				// For database credentials and other types, check field values
+				if values := record.GetFieldValuesByType("password"); len(values) > 0 {
+					if unmask {
+						result["password"] = values[0]
+					} else {
+						result["password"] = maskValue(values[0])
+					}
 				}
 			}
 		case "url":
@@ -352,9 +367,15 @@ func (c *Client) GetField(notation string, unmask bool) (interface{}, error) {
 		"masked": !unmask,
 	})
 
-	// Use SDK's notation support
+	// Try to use SDK's notation support first
 	results, err := c.sm.GetNotation(notation)
 	if err != nil {
+		// Check if it's a duplicate record error
+		if strings.Contains(err.Error(), "multiple records") || strings.Contains(err.Error(), "found multiple records") {
+			// Handle duplicates by getting records manually
+			return c.getFieldFromDuplicates(parsedNotation, unmask)
+		}
+
 		c.logger.LogError("ksm", err, map[string]interface{}{
 			"operation": "get_field",
 			"notation":  notation,
@@ -390,6 +411,108 @@ func (c *Client) GetField(notation string, unmask bool) (interface{}, error) {
 	}
 
 	return nil, errors.New("field not found")
+}
+
+// getFieldFromDuplicates handles getting field from duplicate records
+func (c *Client) getFieldFromDuplicates(parsedNotation *types.NotationResult, unmask bool) (interface{}, error) {
+	// Get all records
+	records, err := c.sm.GetSecrets([]string{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get records: %w", err)
+	}
+
+	// Find matching records by UID or title
+	var matchingRecords []*sm.Record
+	for _, record := range records {
+		if parsedNotation.UID != "" && record.Uid == parsedNotation.UID {
+			matchingRecords = append(matchingRecords, record)
+		} else if parsedNotation.Title != "" && record.Title() == parsedNotation.Title {
+			matchingRecords = append(matchingRecords, record)
+		}
+	}
+
+	if len(matchingRecords) == 0 {
+		return nil, errors.New("record not found")
+	}
+
+	// Use the first matching record (they're all the same)
+	record := matchingRecords[0]
+
+	// Extract the field value
+	var indexPtr *int
+	if parsedNotation.Index > 0 {
+		indexPtr = &parsedNotation.Index
+	}
+	fieldValue, err := c.extractFieldValue(record, parsedNotation.Field, indexPtr)
+	if err != nil {
+		return nil, err
+	}
+
+	// Handle masking
+	if !unmask && isSensitiveField(parsedNotation.Field) {
+		if str, ok := fieldValue.(string); ok {
+			return maskValue(str), nil
+		}
+	}
+
+	return fieldValue, nil
+}
+
+// extractFieldValue extracts a specific field value from a record
+func (c *Client) extractFieldValue(record *sm.Record, field string, index *int) (interface{}, error) {
+	switch field {
+	case "password":
+		// First try the standard Password() method
+		if password := record.Password(); password != "" {
+			return password, nil
+		}
+		// For database credentials and other types, check field values
+		values := record.GetFieldValuesByType("password")
+		if len(values) > 0 {
+			if index != nil && *index < len(values) {
+				return values[*index], nil
+			}
+			return values[0], nil
+		}
+		return "", nil
+	case "login":
+		values := record.GetFieldValuesByType("login")
+		if len(values) > 0 {
+			if index != nil && *index < len(values) {
+				return values[*index], nil
+			}
+			return values[0], nil
+		}
+	case "url":
+		values := record.GetFieldValuesByType("url")
+		if len(values) > 0 {
+			if index != nil && *index < len(values) {
+				return values[*index], nil
+			}
+			return values[0], nil
+		}
+	case "notes":
+		return record.Notes(), nil
+	default:
+		// Try custom fields
+		if record.RecordDict != nil {
+			if customFieldsData, exists := record.RecordDict["custom"]; exists {
+				if customFieldsList, ok := customFieldsData.([]interface{}); ok {
+					for _, fieldData := range customFieldsList {
+						if fieldMap, ok := fieldData.(map[string]interface{}); ok {
+							if label, hasLabel := fieldMap["label"].(string); hasLabel && label == field {
+								if value, hasValue := fieldMap["value"]; hasValue {
+									return value, nil
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return nil, fmt.Errorf("field '%s' not found", field)
 }
 
 // GeneratePassword generates a secure password using KSM

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -8,6 +9,9 @@ import (
 
 	"github.com/spf13/viper"
 )
+
+// ErrConfigNotFound is returned when the config file is not found by Load.
+var ErrConfigNotFound = errors.New("configuration file not found")
 
 // Config represents the application configuration
 type Config struct {
@@ -82,17 +86,32 @@ func Load(configFile string) (*Config, error) {
 	config := DefaultConfig()
 
 	v := viper.New()
-	v.SetConfigName("config")
+	v.SetConfigName("config") // Default name if configFile is a directory
 	v.SetConfigType("yaml")
 
-	// Set default search paths
 	configDir := getConfigDir()
-	v.AddConfigPath(configDir)
-	v.AddConfigPath(".")
+	resolvedConfigFile := configFile
 
-	// If specific config file is provided, use it
-	if configFile != "" {
+	if configFile == "" || configFile == filepath.Join(configDir, "config.yaml") {
+		// We are attempting to load the default config file.
+		// Viper will search in AddConfigPath locations if SetConfigFile isn't called with a specific file.
+		v.AddConfigPath(configDir)
+		v.AddConfigPath(".")
+		// Determine the exact path Viper would use for "config.yaml" in the primary configDir
+		// This is to check its existence accurately.
+		if configFile == "" { // If no specific configFile was passed to Load, assume default.
+			resolvedConfigFile = filepath.Join(configDir, "config.yaml")
+		}
+	} else {
+		// A specific configFile (potentially outside default paths) was given.
 		v.SetConfigFile(configFile)
+		resolvedConfigFile = configFile
+	}
+
+	// Explicitly check if the resolved config file exists before Viper tries to read it.
+	// This gives us a more reliable way to detect "file not found".
+	if _, err := os.Stat(resolvedConfigFile); os.IsNotExist(err) {
+		return nil, ErrConfigNotFound // Return our distinct error
 	}
 
 	// Environment variable overrides
@@ -105,12 +124,17 @@ func Load(configFile string) (*Config, error) {
 	_ = v.BindEnv("logging.level", "KSM_MCP_LOG_LEVEL")
 	_ = v.BindEnv("profiles.default", "KSM_MCP_PROFILE")
 
-	// Read config file
+	// Read config file - at this point, we expect it to exist,
+	// so errors are more likely parsing/permission issues.
 	if err := v.ReadInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
-			return nil, fmt.Errorf("failed to read config file: %w", err)
+		// Though we checked for existence, ReadInConfig can still fail (e.g. permissions)
+		// or if os.Stat passed but Viper has an issue with the path for some reason.
+		// If by some chance it's still a Viper ConfigFileNotFoundError, treat it as our ErrConfigNotFound.
+		var vfnfError viper.ConfigFileNotFoundError
+		if errors.As(err, &vfnfError) {
+			return nil, ErrConfigNotFound
 		}
-		// Config file not found is okay, we'll use defaults
+		return nil, fmt.Errorf("failed to read config file content: %w", err)
 	}
 
 	// Unmarshal config
@@ -170,7 +194,9 @@ func getConfigDir() string {
 
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		return ".keeper/ksm-mcp"
+		// Fall back to current directory with absolute path
+		cwd, _ := os.Getwd()
+		return filepath.Join(cwd, ".keeper", "ksm-mcp")
 	}
 
 	return filepath.Join(homeDir, ".keeper", "ksm-mcp")
@@ -189,24 +215,28 @@ func EnsureConfigDir() error {
 
 // LoadOrCreate loads existing config or creates a new one
 func LoadOrCreate(configFile string) (*Config, error) {
-	// Try to load existing config
-	config, err := Load(configFile)
+	cfg, err := Load(configFile)
 	if err == nil {
-		return config, nil
+		return cfg, nil
 	}
 
-	// If it's a parsing error, return it
-	if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+	if errors.Is(err, ErrConfigNotFound) {
+		// Config doesn't exist, create default
+		cfg = DefaultConfig()
+
+		// Save the default config
+		// Ensure configFile is the full path for saving if it was initially empty or just "config.yaml"
+		finalConfigFile := configFile
+		if finalConfigFile == "" || finalConfigFile == "config.yaml" {
+			finalConfigFile = filepath.Join(getConfigDir(), "config.yaml")
+		}
+
+		if errSave := cfg.Save(finalConfigFile); errSave != nil {
+			return nil, fmt.Errorf("failed to save default config to %s: %w", finalConfigFile, errSave)
+		}
+		return cfg, nil
+	} else {
+		// It's some other error from Load
 		return nil, err
 	}
-
-	// Config doesn't exist, create default
-	config = DefaultConfig()
-
-	// Save the default config
-	if err := config.Save(configFile); err != nil {
-		return nil, fmt.Errorf("failed to save default config: %w", err)
-	}
-
-	return config, nil
 }

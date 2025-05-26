@@ -277,6 +277,8 @@ When the server asks for confirmation:
 - Press Enter or type `n` to deny
 - Default is deny for security
 
+> **Note**: Confirmations work differently in Docker and MCP environments. For detailed information about confirmation modes and troubleshooting, see the [Confirmations Guide](CONFIRMATIONS.md).
+
 ## AI Agent Integration
 
 ### Claude Desktop

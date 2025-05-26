@@ -11,6 +11,9 @@ import (
 	"github.com/keeper-security/ksm-mcp/pkg/types"
 )
 
+// Ensure ProfileStore implements ProfileStoreInterface
+var _ ProfileStoreInterface = (*ProfileStore)(nil)
+
 const (
 	// ProfilesFileName is the filename for the profiles database
 	ProfilesFileName = "profiles.json"
@@ -46,11 +49,16 @@ func NewProfileStore(configDir string) *ProfileStore {
 	store := &ProfileStore{
 		configDir: configDir,
 		profiles:  make(map[string]*types.Profile),
+		encryptor: nil, // Explicitly nil for --no-master-password mode
 	}
 
-	// Initialize with a default encryptor using a generated password
-	defaultPassword, _ := crypto.GeneratePassword(32)
-	store.encryptor = crypto.NewEncryptor(defaultPassword)
+	// Attempt to load existing profiles. Errors are not fatal here during construction;
+	// they might indicate no profiles file exists yet, or other recoverable states.
+	if err := store.loadProfiles(); err != nil {
+		// Log this as a warning or debug message if a logger is available.
+		// For now, we can proceed, as an empty store is valid.
+		// fmt.Fprintf(os.Stderr, "Warning: initial loadProfiles in NewProfileStore failed: %v\n", err)
+	}
 
 	return store
 }
@@ -205,15 +213,22 @@ func (ps *ProfileStore) saveProfiles() error {
 	// Encrypt each profile
 	for name, profile := range ps.profiles {
 		// Serialize profile data
-		profileData, err := json.Marshal(profile)
+		profileDataBytes, err := json.Marshal(profile)
 		if err != nil {
 			return fmt.Errorf("failed to serialize profile '%s': %w", name, err)
 		}
 
-		// Encrypt profile data
-		encryptedData, err := ps.encryptor.EncryptString(string(profileData))
-		if err != nil {
-			return fmt.Errorf("failed to encrypt profile '%s': %w", name, err)
+		dataToStore := string(profileDataBytes)
+		if ps.encryptor != nil {
+			// Encrypt profile data if an encryptor is set (master password mode)
+			encryptedData, err := ps.encryptor.EncryptString(string(profileDataBytes))
+			if err != nil {
+				return fmt.Errorf("failed to encrypt profile '%s': %w", name, err)
+			}
+			dataToStore = encryptedData
+		} else {
+			// No encryptor, store plaintext (ensure this aligns with --no-master-password intent)
+			// The field EncryptedData is a misnomer in this case.
 		}
 
 		// Calculate checksum for integrity verification
@@ -221,7 +236,7 @@ func (ps *ProfileStore) saveProfiles() error {
 
 		db.Profiles[name] = &EncryptedProfile{
 			Name:           name,
-			EncryptedData:  encryptedData,
+			EncryptedData:  dataToStore, // Stores either encrypted or plaintext data
 			CreatedAt:      profile.CreatedAt,
 			UpdatedAt:      profile.UpdatedAt,
 			ConfigChecksum: checksum,
@@ -257,6 +272,7 @@ func (ps *ProfileStore) loadProfiles() error {
 	// Check if profiles file exists
 	if _, err := os.Stat(profilesPath); os.IsNotExist(err) {
 		// No profiles file exists yet, start with empty profiles
+		ps.profiles = make(map[string]*types.Profile) // Ensure it's initialized
 		return nil
 	}
 
@@ -273,27 +289,40 @@ func (ps *ProfileStore) loadProfiles() error {
 	}
 
 	// Decrypt each profile
-	for name, encryptedProfile := range db.Profiles {
-		// Decrypt profile data
-		profileData, err := ps.encryptor.DecryptString(encryptedProfile.EncryptedData)
-		if err != nil {
-			return fmt.Errorf("failed to decrypt profile '%s': %w", name, err)
+	newProfilesMap := make(map[string]*types.Profile)
+	for name, storedProfileEntry := range db.Profiles {
+		profileDataString := storedProfileEntry.EncryptedData
+		if ps.encryptor != nil {
+			// Decrypt profile data if an encryptor is set
+			decryptedData, err := ps.encryptor.DecryptString(storedProfileEntry.EncryptedData)
+			if err != nil {
+				// If decryption fails, this profile might be corrupt or password changed.
+				// We'll log a warning and skip this profile, rather than failing the entire load.
+				fmt.Fprintf(os.Stderr, "Warning: failed to decrypt profile '%s', skipping: %v\n", name, err)
+				continue
+			}
+			profileDataString = decryptedData
+		} else {
+			// No encryptor, data is plaintext (field EncryptedData is a misnomer here)
 		}
 
 		// Deserialize profile
 		var profile types.Profile
-		if err := json.Unmarshal([]byte(profileData), &profile); err != nil {
-			return fmt.Errorf("failed to deserialize profile '%s': %w", name, err)
+		if err := json.Unmarshal([]byte(profileDataString), &profile); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to deserialize profile '%s', skipping: %v\n", name, err)
+			continue
 		}
 
 		// Verify checksum for integrity
 		expectedChecksum := ps.calculateChecksum(profile.Config)
-		if encryptedProfile.ConfigChecksum != expectedChecksum {
-			return fmt.Errorf("profile '%s' has invalid checksum, data may be corrupted", name)
+		if storedProfileEntry.ConfigChecksum != expectedChecksum {
+			fmt.Fprintf(os.Stderr, "Warning: profile '%s' has invalid checksum, data may be corrupted, skipping.\n", name)
+			continue
 		}
 
-		ps.profiles[name] = &profile
+		newProfilesMap[name] = &profile
 	}
+	ps.profiles = newProfilesMap // Atomically update the profiles map
 
 	return nil
 }

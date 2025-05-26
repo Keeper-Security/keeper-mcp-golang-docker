@@ -19,7 +19,7 @@ import (
 
 // Server implements the MCP protocol server
 type Server struct {
-	storage        *storage.ProfileStore
+	storage        storage.ProfileStoreInterface
 	profiles       map[string]KSMClient
 	currentProfile string
 	logger         *audit.Logger
@@ -45,7 +45,7 @@ type ServerOptions struct {
 }
 
 // NewServer creates a new MCP server
-func NewServer(storage *storage.ProfileStore, logger *audit.Logger, options *ServerOptions) *Server {
+func NewServer(storage storage.ProfileStoreInterface, logger *audit.Logger, options *ServerOptions) *Server {
 	if options == nil {
 		options = &ServerOptions{
 			Timeout:   30 * time.Second,
@@ -94,11 +94,6 @@ func (s *Server) Start(ctx context.Context) error {
 	writer := bufio.NewWriter(os.Stdout)
 	defer writer.Flush()
 
-	// Send initialize response
-	if err := s.sendInitializeResponse(writer); err != nil {
-		return fmt.Errorf("failed to send initialize response: %w", err)
-	}
-
 	// Main message loop
 	for {
 		select {
@@ -135,13 +130,13 @@ func (s *Server) processMessage(data []byte, writer *bufio.Writer) error {
 	var request types.MCPRequest
 	if err := json.Unmarshal(data, &request); err != nil {
 		_ = s.sendErrorResponse(writer, nil, -32700, "Parse error", nil)
-		return fmt.Errorf("failed to parse request: %w", err)
+		return nil // Already sent error response
 	}
 
 	// Check rate limit
 	if !s.rateLimiter.Allow(request.Method) {
 		_ = s.sendErrorResponse(writer, request.ID, -32029, "Rate limit exceeded", nil)
-		return fmt.Errorf("rate limit exceeded")
+		return nil // Already sent error response
 	}
 
 	// Log request
@@ -156,6 +151,9 @@ func (s *Server) processMessage(data []byte, writer *bufio.Writer) error {
 		return s.handleInitialize(request, writer)
 	case "initialized":
 		return s.handleInitialized(request, writer)
+	case "notifications/initialized":
+		// This is a notification, no response needed
+		return s.handleInitialized(request, writer)
 	case "tools/list":
 		return s.handleToolsList(request, writer)
 	case "tools/call":
@@ -166,9 +164,22 @@ func (s *Server) processMessage(data []byte, writer *bufio.Writer) error {
 		return s.handleSessionCreate(request, writer)
 	case "sessions/end":
 		return s.handleSessionEnd(request, writer)
+	case "resources/list":
+		// Resources not supported, send empty list
+		return s.sendResponse(writer, request.ID, map[string]interface{}{
+			"resources": []interface{}{},
+		})
+	case "prompts/list":
+		// Prompts not supported, send empty list
+		return s.sendResponse(writer, request.ID, map[string]interface{}{
+			"prompts": []interface{}{},
+		})
 	default:
-		_ = s.sendErrorResponse(writer, request.ID, -32601, "Method not found", nil)
-		return fmt.Errorf("unknown method: %s", request.Method)
+		// Only send error response if this is a request (has an ID)
+		if request.ID != nil {
+			_ = s.sendErrorResponse(writer, request.ID, -32601, "Method not found", nil)
+		}
+		return nil // Already handled
 	}
 }
 
@@ -232,6 +243,9 @@ func (s *Server) sendResponse(writer *bufio.Writer, id interface{}, result inter
 	if err != nil {
 		return fmt.Errorf("failed to marshal response: %w", err)
 	}
+	
+	// Debug log the response
+	// fmt.Fprintf(os.Stderr, "DEBUG: Sending response: %s\n", string(data))
 
 	if _, err := writer.Write(data); err != nil {
 		return fmt.Errorf("failed to write response: %w", err)

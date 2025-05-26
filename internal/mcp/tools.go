@@ -158,8 +158,23 @@ func (s *Server) getAvailableTools() []types.MCPTool {
 						"description": "Secret title",
 					},
 					"fields": map[string]interface{}{
-						"type":        "object",
-						"description": "Field values (login, password, url, etc.)",
+						"type":        "array",
+						"description": "Field values array",
+						"items": map[string]interface{}{
+							"type": "object",
+							"properties": map[string]interface{}{
+								"type": map[string]interface{}{
+									"type":        "string",
+									"description": "Field type (login, password, url, etc.)",
+								},
+								"value": map[string]interface{}{
+									"type":        "array",
+									"description": "Field value(s)",
+									"items":       map[string]interface{}{"type": "string"},
+								},
+							},
+							"required": []string{"type", "value"},
+						},
 					},
 					"notes": map[string]interface{}{
 						"type":        "string",
@@ -184,8 +199,23 @@ func (s *Server) getAvailableTools() []types.MCPTool {
 						"description": "New title",
 					},
 					"fields": map[string]interface{}{
-						"type":        "object",
+						"type":        "array",
 						"description": "Field values to update",
+						"items": map[string]interface{}{
+							"type": "object",
+							"properties": map[string]interface{}{
+								"type": map[string]interface{}{
+									"type":        "string",
+									"description": "Field type (login, password, url, etc.)",
+								},
+								"value": map[string]interface{}{
+									"type":        "array",
+									"description": "Field value(s)",
+									"items":       map[string]interface{}{"type": "string"},
+								},
+							},
+							"required": []string{"type", "value"},
+						},
 					},
 					"notes": map[string]interface{}{
 						"type":        "string",

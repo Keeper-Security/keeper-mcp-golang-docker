@@ -10,6 +10,8 @@ import (
 
 // handleInitialize handles the initialize request
 func (s *Server) handleInitialize(request types.MCPRequest, writer *bufio.Writer) error {
+	// Debug log the request
+	// fmt.Fprintf(os.Stderr, "DEBUG: Initialize request ID: %v (type: %T)\n", request.ID, request.ID)
 	// Parse initialize params
 	var params struct {
 		ProtocolVersion string `json:"protocolVersion"`
@@ -25,8 +27,23 @@ func (s *Server) handleInitialize(request types.MCPRequest, writer *bufio.Writer
 	}
 
 	if request.Params != nil {
-		if err := json.Unmarshal(request.Params.(json.RawMessage), &params); err != nil {
-			return fmt.Errorf("failed to parse initialize params: %w", err)
+		// Handle params as either json.RawMessage or map[string]interface{}
+		switch p := request.Params.(type) {
+		case json.RawMessage:
+			if err := json.Unmarshal(p, &params); err != nil {
+				return fmt.Errorf("failed to parse initialize params: %w", err)
+			}
+		case map[string]interface{}:
+			// Convert map to JSON then unmarshal
+			jsonBytes, err := json.Marshal(p)
+			if err != nil {
+				return fmt.Errorf("failed to marshal params: %w", err)
+			}
+			if err := json.Unmarshal(jsonBytes, &params); err != nil {
+				return fmt.Errorf("failed to parse initialize params: %w", err)
+			}
+		default:
+			return fmt.Errorf("unexpected params type: %T", request.Params)
 		}
 	}
 
@@ -38,13 +55,13 @@ func (s *Server) handleInitialize(request types.MCPRequest, writer *bufio.Writer
 	})
 
 	// Send initialize response
-	return s.sendInitializeResponse(writer)
+	return s.sendInitializeResponse(writer, request.ID)
 }
 
 // sendInitializeResponse sends the server capabilities
-func (s *Server) sendInitializeResponse(writer *bufio.Writer) error {
+func (s *Server) sendInitializeResponse(writer *bufio.Writer, requestID interface{}) error {
 	response := map[string]interface{}{
-		"protocolVersion": "1.0",
+		"protocolVersion": "2024-11-05",
 		"capabilities": map[string]interface{}{
 			"tools": map[string]interface{}{
 				"list": true,
@@ -62,7 +79,7 @@ func (s *Server) sendInitializeResponse(writer *bufio.Writer) error {
 		},
 	}
 
-	return s.sendResponse(writer, nil, response)
+	return s.sendResponse(writer, requestID, response)
 }
 
 // handleInitialized handles the initialized notification
@@ -105,10 +122,20 @@ func (s *Server) handleToolCall(request types.MCPRequest, writer *bufio.Writer) 
 	result, err := s.executeTool(params.Name, params.Arguments)
 	if err != nil {
 		_ = s.sendErrorResponse(writer, request.ID, -32002, err.Error(), nil)
-		return err
+		return nil // Don't return error after sending response
 	}
 
-	return s.sendResponse(writer, request.ID, result)
+	// Wrap tool result in proper format
+	response := map[string]interface{}{
+		"content": []map[string]interface{}{
+			{
+				"type": "text",
+				"text": formatToolResult(result),
+			},
+		},
+	}
+
+	return s.sendResponse(writer, request.ID, response)
 }
 
 // handleSessionsList handles the sessions/list request
@@ -237,4 +264,15 @@ func (s *Server) handleSessionEnd(request types.MCPRequest, writer *bufio.Writer
 	}
 
 	return s.sendResponse(writer, request.ID, response)
+}
+
+// formatToolResult formats the tool result as a string for the text content
+func formatToolResult(result interface{}) string {
+	// Pretty print JSON for better readability
+	jsonBytes, err := json.MarshalIndent(result, "", "  ")
+	if err != nil {
+		// Fallback to simple string conversion
+		return fmt.Sprintf("%v", result)
+	}
+	return string(jsonBytes)
 }

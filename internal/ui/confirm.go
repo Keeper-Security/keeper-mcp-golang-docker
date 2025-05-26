@@ -109,10 +109,35 @@ func (c *Confirmer) promptUser(ctx context.Context, message string) *Confirmatio
 			defaultHint = "[y/N]"
 		}
 
-		fmt.Printf("%s %s%s ", message, defaultHint, timeoutMsg)
+		fmt.Fprintf(os.Stderr, "%s %s%s ", message, defaultHint, timeoutMsg)
+
+		// Try to open /dev/tty for input if available (works even when stdin is used for MCP)
+		var reader *bufio.Reader
+		tty, err := os.Open("/dev/tty")
+		if err == nil {
+			// Successfully opened /dev/tty - use it for input
+			defer tty.Close()
+			reader = bufio.NewReader(tty)
+		} else {
+			// Check if we're running in MCP mode (stdin used for protocol)
+			// This is detected by checking if we can't open /dev/tty
+			if os.Getenv("KSM_MCP_MODE") == "stdio" || err != nil {
+				// We're in MCP mode without TTY - can't do interactive confirmations
+				errorChan <- fmt.Errorf(`interactive confirmation not available in MCP stdio mode
+
+To resolve this, you have several options:
+1. Enable batch mode: Add "-e", "KSM_MCP_BATCH_MODE=true" to your Docker config
+2. Run locally: Install ksm-mcp binary and run without Docker
+3. Use pre-approved operations: Add --auto-approve flag (DANGEROUS - use only for testing)
+
+Current operation requires confirmation: %s`, message)
+				return
+			}
+			// Fallback to stdin (for non-MCP interactive use)
+			reader = bufio.NewReader(os.Stdin)
+		}
 
 		// Read user input
-		reader := bufio.NewReader(os.Stdin)
 		response, err := reader.ReadString('\n')
 		if err != nil {
 			errorChan <- fmt.Errorf("failed to read user input: %w", err)
@@ -126,7 +151,7 @@ func (c *Confirmer) promptUser(ctx context.Context, message string) *Confirmatio
 	select {
 	case <-promptCtx.Done():
 		// Timeout or cancellation
-		fmt.Println("\nTimeout - using default response")
+		fmt.Fprintln(os.Stderr, "\nTimeout - using default response")
 		return &ConfirmationResult{
 			Approved: !c.config.DefaultDeny,
 			TimedOut: true,
@@ -167,7 +192,7 @@ func (c *Confirmer) parseResponse(response string) bool {
 		return false
 	default:
 		// Invalid response uses default
-		fmt.Printf("Invalid response '%s', using default\n", response)
+		fmt.Fprintf(os.Stderr, "Invalid response '%s', using default\n", response)
 		return !c.config.DefaultDeny
 	}
 }
@@ -210,22 +235,22 @@ func (c *Confirmer) isSensitiveKey(key string) bool {
 
 // DisplayWarning displays a warning message to the user
 func (c *Confirmer) DisplayWarning(message string) {
-	fmt.Printf("⚠️  WARNING: %s\n", message)
+	fmt.Fprintf(os.Stderr, "⚠️  WARNING: %s\n", message)
 }
 
 // DisplayInfo displays an informational message to the user
 func (c *Confirmer) DisplayInfo(message string) {
-	fmt.Printf("ℹ️  INFO: %s\n", message)
+	fmt.Fprintf(os.Stderr, "ℹ️  INFO: %s\n", message)
 }
 
 // DisplayError displays an error message to the user
 func (c *Confirmer) DisplayError(message string) {
-	fmt.Printf("❌ ERROR: %s\n", message)
+	fmt.Fprintf(os.Stderr, "❌ ERROR: %s\n", message)
 }
 
 // DisplaySuccess displays a success message to the user
 func (c *Confirmer) DisplaySuccess(message string) {
-	fmt.Printf("✅ SUCCESS: %s\n", message)
+	fmt.Fprintf(os.Stderr, "✅ SUCCESS: %s\n", message)
 }
 
 // ConfirmBatchOperation handles batch operation confirmations
@@ -287,9 +312,9 @@ func (c *Confirmer) ShowProgress(current, total int, message string) {
 	}
 
 	percent := float64(current) / float64(total) * 100
-	fmt.Printf("\r[%3.0f%%] %s (%d/%d)", percent, message, current, total)
+	fmt.Fprintf(os.Stderr, "\r[%3.0f%%] %s (%d/%d)", percent, message, current, total)
 
 	if current == total {
-		fmt.Println() // New line when complete
+		fmt.Fprintln(os.Stderr) // New line when complete
 	}
 }
