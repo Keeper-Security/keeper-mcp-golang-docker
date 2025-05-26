@@ -50,7 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial release of KSM MCP (Keeper Secrets Manager Model Context Protocol) server
 - Full MCP protocol implementation with JSON-RPC 2.0 over stdio
 - Secure profile management with AES-256-GCM encryption
-- Master password protection for stored credentials
+- Protection password for stored credentials and local profile encryption
 - 13 MCP tools for comprehensive secret management:
   - `list_secrets` - List all accessible secrets
   - `get_secret` - Retrieve specific secrets with masking

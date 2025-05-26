@@ -147,21 +147,21 @@ func runServe(cmd *cobra.Command, args []string) error {
 			profile: dockerProfile,
 		}
 		// fmt.Fprintf(os.Stderr, "Using direct KSM configuration (no profile storage)\n")
-	} else if cfg.Security.MasterPasswordHash != "" {
-		// Handle master password case
+	} else if cfg.Security.ProtectionPasswordHash != "" {
+		// Handle protection password case
 		var password string
 
 		// Try to load from Docker secret first
 		if config.IsRunningInDocker() {
-			if secretPassword, err := config.LoadMasterPasswordFromSecret(); err == nil {
+			if secretPassword, err := config.LoadProtectionPasswordFromSecret(); err == nil {
 				password = secretPassword
-				// fmt.Fprintf(os.Stderr, "Loaded master password from Docker secret\n")
+				// fmt.Fprintf(os.Stderr, "Loaded protection password from Docker secret\n")
 			}
 		}
 
 		// If not in Docker or secret not found, prompt
 		if password == "" {
-			fmt.Fprint(os.Stderr, "Enter master password: ")
+			fmt.Fprint(os.Stderr, "Enter protection password: ")
 			var err error
 			password, err = readPassword()
 			if err != nil {

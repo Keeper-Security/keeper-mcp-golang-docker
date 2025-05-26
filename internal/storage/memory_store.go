@@ -120,8 +120,9 @@ func (m *MemoryProfileStore) DeleteProfile(name string) error {
 	return nil
 }
 
-// SetMasterPassword is a no-op for memory store
-func (m *MemoryProfileStore) SetMasterPassword(password string) error {
+// SetProtectionPassword is a no-op for memory store
+func (m *MemoryProfileStore) SetProtectionPassword(password string) error {
+	// In-memory store does not use password protection for the store itself
 	return nil
 }
 
@@ -152,3 +153,5 @@ func (m *MemoryProfileStore) GetClient(name string) (interface{}, error) {
 
 	return client, nil
 }
+
+// GetPasswordHash is a no-op for memory store

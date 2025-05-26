@@ -87,7 +87,7 @@ type Profile struct {
 ```
 
 Features:
-- Master password protection
+- Protection password for local profile encryption
 - Profile isolation
 - Atomic operations
 - Corruption detection
@@ -139,7 +139,7 @@ Protects against:
 
 ```go
 type Encryptor struct {
-    key        []byte  // Derived from master password
+    key        []byte  // Derived from protection password
     salt       []byte  // Random per-profile
     iterations int     // PBKDF2 iterations (100,000)
 }
@@ -191,7 +191,7 @@ type Confirmer struct {
    - TLS for KSM API communication
 
 2. **Authentication**
-   - Master password for local access
+   - Protection password for local access
    - KSM credentials never exposed
    - Session timeout enforcement
 
@@ -215,7 +215,7 @@ type Confirmer struct {
 | Threat | Mitigation |
 |--------|------------|
 | Malicious AI agent | Confirmation prompts, rate limiting |
-| Profile theft | Master password, encryption |
+| Profile theft | Protection password, encryption |
 | Injection attacks | Input validation, sanitization |
 | Memory dumps | Credential zeroing, minimal retention |
 | Log tampering | Append-only logs, checksums |

@@ -16,10 +16,10 @@ import (
 )
 
 var (
-	initProfile          string
-	initToken            string
-	initConfig           string
-	initNoMasterPassword bool
+	initProfile              string
+	initToken                string
+	initConfig               string
+	initNoProtectionPassword bool
 )
 
 // initCmd represents the init command
@@ -54,7 +54,7 @@ func init() {
 	initCmd.Flags().StringVar(&initProfile, "profile", "", "profile name (required)")
 	initCmd.Flags().StringVar(&initToken, "token", "", "one-time token (US:TOKEN_HERE)")
 	initCmd.Flags().StringVar(&initConfig, "config", "", "path to KSM config file or base64-encoded config")
-	initCmd.Flags().BoolVar(&initNoMasterPassword, "no-master-password", false, "disable master password protection (NOT RECOMMENDED)")
+	initCmd.Flags().BoolVar(&initNoProtectionPassword, "no-protection-password", false, "disable protection password for local profile encryption (NOT RECOMMENDED)")
 	_ = initCmd.MarkFlagRequired("profile")
 }
 
@@ -106,8 +106,8 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	// Create storage with password if config has one
 	var store *storage.ProfileStore
-	if cfg.Security.MasterPasswordHash != "" {
-		fmt.Fprint(os.Stderr, "Enter master password: ")
+	if cfg.Security.ProtectionPasswordHash != "" {
+		fmt.Fprint(os.Stderr, "Enter protection password: ")
 		password, err := readPassword()
 		if err != nil {
 			return fmt.Errorf("failed to read password: %w", err)
@@ -119,24 +119,24 @@ func runInit(cmd *cobra.Command, args []string) error {
 		}
 	} else {
 		// First time setup
-		if initNoMasterPassword {
+		if initNoProtectionPassword {
 			// Create store without password
-			fmt.Fprintln(os.Stderr, "⚠️  WARNING: Creating profile WITHOUT master password protection.")
+			fmt.Fprintln(os.Stderr, "⚠️  WARNING: Creating profile WITHOUT protection password for local profile encryption.")
 			fmt.Fprintln(os.Stderr, "Your KSM credentials will be stored in plain text.")
 			fmt.Fprintln(os.Stderr, "This is NOT RECOMMENDED for production use.")
 
 			store = storage.NewProfileStore(configDir)
 		} else {
-			// Prompt for master password
-			fmt.Fprintln(os.Stderr, "First time setup - please create a master password.")
+			// Prompt for protection password
+			fmt.Fprintln(os.Stderr, "First time setup - please create a protection password for local profile encryption.")
 			fmt.Fprintln(os.Stderr, "This password will be used to encrypt all stored profiles.")
-			fmt.Fprint(os.Stderr, "Enter master password: ")
+			fmt.Fprint(os.Stderr, "Enter protection password: ")
 			password, err := readPassword()
 			if err != nil {
 				return fmt.Errorf("failed to read password: %w", err)
 			}
 
-			fmt.Fprint(os.Stderr, "Confirm master password: ")
+			fmt.Fprint(os.Stderr, "Confirm protection password: ")
 			confirm, err := readPassword()
 			if err != nil {
 				return fmt.Errorf("failed to read password: %w", err)
@@ -151,8 +151,8 @@ func runInit(cmd *cobra.Command, args []string) error {
 				return fmt.Errorf("failed to create profile store: %w", err)
 			}
 
-			// Save master password hash in config
-			cfg.Security.MasterPasswordHash = store.GetPasswordHash()
+			// Save protection password hash in config
+			cfg.Security.ProtectionPasswordHash = store.GetPasswordHash()
 			if err := cfg.SaveDefault(); err != nil {
 				return fmt.Errorf("failed to save config: %w", err)
 			}

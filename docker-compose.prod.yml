@@ -29,8 +29,8 @@ services:
         target: ksm_token
       - source: ksm_config_prod
         target: ksm_config
-      - source: master_password_prod
-        target: master_password
+      - source: protection_password_prod
+        target: protection_password
     
     # No interactive mode in production
     stdin_open: false
@@ -147,12 +147,12 @@ volumes:
 secrets:
   ksm_token_prod:
     external: true
-    external_name: ksm_token_production
+    name: ksm_token_production
   
   ksm_config_prod:
     external: true
-    external_name: ksm_config_production
+    name: ksm_config_production
   
-  master_password_prod:
+  protection_password_prod:
     external: true
-    external_name: ksm_master_password_production
+    name: ksm_protection_password_production

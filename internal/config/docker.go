@@ -13,10 +13,10 @@ import (
 
 const (
 	// Docker secret paths
-	DockerSecretsPath        = "/run/secrets"
-	TokenSecretName          = "ksm_token"
-	ConfigSecretName         = "ksm_config" // #nosec G101 - not a credential, just a filename
-	MasterPasswordSecretName = "master_password"
+	DockerSecretsPath            = "/run/secrets"
+	TokenSecretName              = "ksm_token"
+	ConfigSecretName             = "ksm_config" // #nosec G101 - not a credential, just a filename
+	ProtectionPasswordSecretName = "protection_password"
 )
 
 // LoadDockerSecrets attempts to load configuration from Docker secrets
@@ -96,17 +96,22 @@ func LoadDockerSecrets() (*types.Profile, error) {
 	return nil, fmt.Errorf("no valid Docker secrets found")
 }
 
-// LoadMasterPasswordFromSecret loads the master password from Docker secret
-func LoadMasterPasswordFromSecret() (string, error) {
-	passwordPath := filepath.Join(DockerSecretsPath, MasterPasswordSecretName)
-	// #nosec G304 -- Docker secret path is a controlled environment variable
-	if passwordData, err := os.ReadFile(passwordPath); err == nil {
+// LoadProtectionPasswordFromSecret loads the protection password from Docker secret
+func LoadProtectionPasswordFromSecret() (string, error) {
+	secretPath := os.Getenv("KSM_MCP_PROTECTION_PASSWORD_SECRET_PATH")
+	if secretPath == "" {
+		secretPath = filepath.Join(DockerSecretsPath, ProtectionPasswordSecretName)
+	}
+
+	// #nosec G304 -- Docker secret path is a controlled environment variable or a default
+	if passwordData, err := os.ReadFile(secretPath); err == nil {
 		password := strings.TrimSpace(string(passwordData))
 		if password != "" {
 			return password, nil
 		}
 	}
-	return "", fmt.Errorf("master password secret not found")
+	// Ensure error message refers to protection password and new secret name
+	return "", fmt.Errorf("protection password secret not found or empty at %s (ensure KSM_MCP_PROTECTION_PASSWORD_SECRET_PATH is set or %s secret exists and is populated)", secretPath, ProtectionPasswordSecretName)
 }
 
 // IsRunningInDocker checks if the application is running inside a Docker container

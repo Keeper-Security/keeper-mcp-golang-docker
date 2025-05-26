@@ -168,7 +168,7 @@ ksm-mcp/
 **✅ PROJECT COMPLETE**: All 8 phases have been successfully implemented!
 
 ### Completed Features:
-1. **Secure Architecture**: AES-256-GCM encryption, master password protection, audit logging
+1. **Secure Architecture**: AES-256-GCM encryption, protection password for local profiles, audit logging
 2. **Full KSM Integration**: All operations including TOTP, password generation, file management
 3. **Complete MCP Implementation**: 13+ tools with proper JSON-RPC protocol
 4. **Professional CLI**: Multiple commands with batch mode and profile management
@@ -180,7 +180,7 @@ ksm-mcp/
 2. **Improved Security Warnings**: Clear warnings about password exposure to AI
 3. **Better UX**: UIDs prominently displayed, professional terminology
 4. **Flexible Config**: Supports file paths and base64 configs intelligently
-5. **Optional Master Password**: Can be disabled with warnings (not recommended)
+5. **Optional Protection Password**: Can be disabled with warnings (not recommended)
 
 ### Outstanding Items (Minor):
 - GitHub Actions CI/CD setup

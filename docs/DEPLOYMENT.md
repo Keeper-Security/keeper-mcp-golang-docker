@@ -26,9 +26,13 @@ If you followed the Quick Start guide with base64 configuration, here's how to t
    echo "YOUR_BASE64_CONFIG" | base64 -d > ksm-config.json
    ```
 
-2. **Add master password protection** to your existing profile:
+2. **Add protection password for local profile encryption** to your existing profile:
    ```bash
-   ksm-mcp profiles update --add-master-password
+   # To enable protection password for an existing profile that was initialized without one,
+   # you would typically re-initialize the profile using the 'init' command.
+   # Ensure you omit the --no-protection-password flag during re-initialization.
+   # Example: ksm-mcp init --profile your_profile_name --config your_config_source
+   # (There is no dedicated 'add-protection-password' command for an existing profile currently.)
    ```
 
 3. **Move configuration** to secure locations:
@@ -82,9 +86,9 @@ mkdir -p /etc/ksm-mcp/secrets /var/lib/ksm-mcp/config /var/log/ksm-mcp
 echo "YOUR_BASE64_CONFIG" | base64 -d > /etc/ksm-mcp/secrets/ksm_config.json
 chmod 600 /etc/ksm-mcp/secrets/ksm_config.json
 
-# Create master password file
-echo "YOUR_SECURE_MASTER_PASSWORD" > /etc/ksm-mcp/secrets/master_password.txt
-chmod 600 /etc/ksm-mcp/secrets/master_password.txt
+# Create protection password file (for conceptual --protection-password-file flag)
+echo "YOUR_SECURE_PROTECTION_PASSWORD" > /etc/ksm-mcp/secrets/protection_password.txt
+chmod 600 /etc/ksm-mcp/secrets/protection_password.txt
 ```
 
 2. **Initialize the profile**:
@@ -93,7 +97,7 @@ docker run -it --rm \
   -v /var/lib/ksm-mcp/config:/home/ksm/.keeper/ksm-mcp \
   -v /etc/ksm-mcp/secrets:/run/secrets:ro \
   keepersecurityinc/ksm-mcp-poc:latest \
-  init --config /run/secrets/ksm_config.json --master-password-file /run/secrets/master_password.txt
+  init --config /run/secrets/ksm_config.json # The --protection-password-file flag (conceptual) does not exist; use --no-protection-password during init to control encryption.
 ```
 
 3. **Run in production mode**:
@@ -117,7 +121,7 @@ docker run -d \
 
 1. **Never use base64 config directly in production** - Convert to file
 2. **Use volume mounts** instead of environment variables
-3. **Enable master password** protection
+3. **Enable protection password** protection
 4. **Run as read-only** with minimal privileges
 5. **Use secrets management** for sensitive data
 
@@ -199,9 +203,9 @@ kubectl create secret generic ksm-secrets \
   --from-literal=token=YOUR_KSM_TOKEN \
   -n ksm-mcp
 
-# Create master password secret
-kubectl create secret generic master-password \
-  --from-literal=password=YOUR_MASTER_PASSWORD \
+# Create protection password secret
+kubectl create secret generic protection-password \
+  --from-literal=password=YOUR_PROTECTION_PASSWORD \
   -n ksm-mcp
 ```
 
@@ -242,12 +246,12 @@ spec:
           mountPath: /home/keeper/.keeper/ksm-mcp
         - name: logs
           mountPath: /var/log/ksm-mcp
-        - name: ksm-token
+        - name: ksm-token-secret
           mountPath: /run/secrets/ksm_token
           subPath: token
           readOnly: true
-        - name: master-password
-          mountPath: /run/secrets/master_password
+        - name: protection-password-secret
+          mountPath: /run/secrets/protection-password
           subPath: password
           readOnly: true
         resources:
@@ -281,12 +285,18 @@ spec:
           claimName: ksm-config-pvc
       - name: logs
         emptyDir: {}
-      - name: ksm-token
+      - name: ksm-token-secret
         secret:
           secretName: ksm-secrets
-      - name: master-password
+          items:
+            - key: token
+              path: token
+      - name: protection-password-secret
         secret:
-          secretName: master-password
+          secretName: protection-password
+          items:
+            - key: password
+              path: password
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -397,7 +407,7 @@ sudo systemctl status ksm-mcp
 
 ### Access Control
 
-1. **Use master password** for profile encryption
+1. **Use protection password** for profile encryption
 2. **Rotate KSM tokens** regularly
 3. **Limit profile permissions** in KSM
 4. **Enable audit logging**

@@ -28,8 +28,8 @@ security:
   # Confirmation timeout - how long to wait for user response
   confirmation_timeout: 30s
   
-  # Master password hash - auto-generated, do not edit
-  master_password_hash: "..."
+  # Protection password hash - auto-generated, do not edit. Stores the hash of the protection password.
+  protection_password_hash: ""
 
 # Logging Configuration
 logging:

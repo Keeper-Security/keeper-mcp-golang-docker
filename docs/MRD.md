@@ -17,7 +17,7 @@ All 8 phases have been successfully implemented. The KSM MCP server is feature-c
 - Improved security warnings for password exposure
 - Simplified config handling (supports both files and base64)
 - Professional terminology throughout ("Quick Start Guide" vs "TLDR")
-- Optional master password support
+- Optional protection password support for local profile encryption
 
 ---
 

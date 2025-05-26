@@ -66,7 +66,7 @@ mcp:
     requests_per_hour: 1000
 
 security:
-  enable_master_password: true
+  enable_protection_password: true
   confirmations:
     enabled: true
     timeout: 30s
@@ -88,12 +88,15 @@ EOF
     echo -e "${GREEN}Configuration created at: $CONFIG_DIR/config.yaml${NC}"
 fi
 
-# Set up master password
-echo
-echo -e "${BLUE}Master Password Setup${NC}"
-echo "A master password is required to encrypt your KSM credentials."
-echo "This password will be required each time you start the MCP server."
-echo
+# Set up protection password
+if [ "$SETUP_PROTECTION_PASSWORD" = true ]; then
+    echo -e "${BLUE}Protection Password Setup${NC}"
+    echo "A protection password is required to encrypt your KSM credentials stored locally."
+    # This script would then call ksm-mcp init (without --no-protection-password)
+    # which would handle the actual password prompt and config update.
+    # For this example, we assume ksm-mcp init handles it.
+    echo "Run 'ksm-mcp init' and follow prompts to set your protection password."
+fi
 
 # Initialize first profile
 echo

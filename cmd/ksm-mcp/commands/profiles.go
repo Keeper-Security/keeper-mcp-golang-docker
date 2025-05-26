@@ -85,8 +85,8 @@ func runProfilesList(cmd *cobra.Command, args []string) error {
 
 	// Create storage
 	var store *storage.ProfileStore
-	if cfg.Security.MasterPasswordHash != "" {
-		fmt.Fprint(os.Stderr, "Enter master password: ")
+	if cfg.Security.ProtectionPasswordHash != "" {
+		fmt.Fprint(os.Stderr, "Enter protection password: ")
 		password, readErr := readPassword()
 		if readErr != nil {
 			return fmt.Errorf("failed to read password: %w", readErr)
@@ -149,8 +149,8 @@ func runProfilesDelete(cmd *cobra.Command, args []string) error {
 
 	// Create storage
 	var store *storage.ProfileStore
-	if cfg.Security.MasterPasswordHash != "" {
-		fmt.Fprint(os.Stderr, "Enter master password: ")
+	if cfg.Security.ProtectionPasswordHash != "" {
+		fmt.Fprint(os.Stderr, "Enter protection password: ")
 		password, readErr := readPassword()
 		if readErr != nil {
 			return fmt.Errorf("failed to read password: %w", readErr)
@@ -214,8 +214,8 @@ func runProfilesSetDefault(cmd *cobra.Command, args []string) error {
 
 	// Create storage to verify profile exists
 	var store *storage.ProfileStore
-	if cfg.Security.MasterPasswordHash != "" {
-		fmt.Fprint(os.Stderr, "Enter master password: ")
+	if cfg.Security.ProtectionPasswordHash != "" {
+		fmt.Fprint(os.Stderr, "Enter protection password: ")
 		password, readErr := readPassword()
 		if readErr != nil {
 			return fmt.Errorf("failed to read password: %w", readErr)
@@ -265,8 +265,8 @@ func runProfilesShow(cmd *cobra.Command, args []string) error {
 
 	// Create storage
 	var store *storage.ProfileStore
-	if cfg.Security.MasterPasswordHash != "" {
-		fmt.Fprint(os.Stderr, "Enter master password: ")
+	if cfg.Security.ProtectionPasswordHash != "" {
+		fmt.Fprint(os.Stderr, "Enter protection password: ")
 		password, readErr := readPassword()
 		if readErr != nil {
 			return fmt.Errorf("failed to read password: %w", readErr)

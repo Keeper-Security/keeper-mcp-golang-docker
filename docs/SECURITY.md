@@ -99,10 +99,10 @@ Detection: Unauthorized operation attempts
 
 ### 1. Authentication & Authorization
 
-#### Master Password Protection
+#### Protection Password for Local Profile Encryption
 ```yaml
 security:
-  master_password:
+  protection_password:
     min_length: 12
     require_complexity: true
     pbkdf2_iterations: 100000
@@ -327,8 +327,8 @@ alerts:
 ```yaml
 # config.yaml
 security:
-  # Master password
-  enable_master_password: true
+  # Protection Password
+  enable_protection_password: true
   password_min_length: 16
   
   # Session management
@@ -376,7 +376,7 @@ operations:
 
 ### Hardening Checklist
 
-- [ ] Enable master password
+- [ ] Enable protection password for local profile encryption
 - [ ] Set strong password policy
 - [ ] Configure session timeout
 - [ ] Enable rate limiting
@@ -529,6 +529,7 @@ func TestSQLInjectionPrevention(t *testing.T) {
 - [ ] Security tests passed
 - [ ] Code review completed
 - [ ] Threat model updated
+- [ ] Ensure all references to local password use "protection password"
 
 #### Deployment
 - [ ] Secure configuration

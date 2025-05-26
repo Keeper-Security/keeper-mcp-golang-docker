@@ -12,7 +12,7 @@ type: Opaque
 data:
   # Base64 encode your values: echo -n "your-token" | base64
   token: <base64-encoded-token>
-  master-password: <base64-encoded-password>
+  protection-password: <base64-encoded-password>
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -28,7 +28,7 @@ data:
       rate_limit:
         requests_per_minute: 60
     security:
-      enable_master_password: true
+      enable_protection_password: true
       confirmations:
         enabled: true
     logging:
@@ -82,22 +82,23 @@ spec:
           value: "/home/keeper/.keeper/ksm-mcp"
         - name: KSM_MCP_PROFILE
           value: "kubernetes"
+        - name: KSM_MCP_PROTECTION_PASSWORD_SECRET_PATH
+          value: /run/secrets/protection-password/password
         - name: KSM_MCP_LOG_LEVEL
           value: "info"
         - name: KSM_MCP_BATCH_MODE
           value: "true"
         volumeMounts:
-        - name: config
+        - name: config-volume
           mountPath: /home/keeper/.keeper/ksm-mcp
-        - name: storage
-          mountPath: /var/lib/ksm-mcp
-        - name: ksm-token
+        - name: logs
+          mountPath: /var/log/ksm-mcp
+        - name: ksm-token-secret
           mountPath: /run/secrets/ksm_token
           subPath: token
           readOnly: true
-        - name: master-password
-          mountPath: /run/secrets/master_password
-          subPath: master-password
+        - name: protection-password-secret
+          mountPath: /run/secrets/protection-password
           readOnly: true
         resources:
           requests:
@@ -131,24 +132,23 @@ spec:
             drop:
             - ALL
       volumes:
-      - name: config
+      - name: config-volume
         configMap:
           name: ksm-mcp-config
-      - name: storage
-        persistentVolumeClaim:
-          claimName: ksm-mcp-storage
-      - name: ksm-token
+      - name: logs
+        emptyDir: {}
+      - name: ksm-token-secret
         secret:
           secretName: ksm-secrets
           items:
-          - key: token
-            path: token
-      - name: master-password
+            - key: token
+              path: token
+      - name: protection-password-secret
         secret:
           secretName: ksm-secrets
           items:
-          - key: master-password
-            path: master-password
+            - key: protection-password
+              path: password
 ---
 apiVersion: v1
 kind: Service

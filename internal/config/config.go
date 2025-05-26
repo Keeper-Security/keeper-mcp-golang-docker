@@ -35,12 +35,12 @@ type RateLimit struct {
 
 // SecurityConfig represents security settings
 type SecurityConfig struct {
-	BatchMode           bool          `mapstructure:"batch_mode"`
-	AutoApprove         bool          `mapstructure:"auto_approve"`
-	MaskByDefault       bool          `mapstructure:"mask_by_default"`
-	SessionTimeout      time.Duration `mapstructure:"session_timeout"`
-	ConfirmationTimeout time.Duration `mapstructure:"confirmation_timeout"`
-	MasterPasswordHash  string        `mapstructure:"master_password_hash"`
+	BatchMode              bool          `mapstructure:"batch_mode"`
+	AutoApprove            bool          `mapstructure:"auto_approve"`
+	MaskByDefault          bool          `mapstructure:"mask_by_default"`
+	SessionTimeout         time.Duration `mapstructure:"session_timeout"`
+	ConfirmationTimeout    time.Duration `mapstructure:"confirmation_timeout"`
+	ProtectionPasswordHash string        `mapstructure:"protection_password_hash"`
 }
 
 // LoggingConfig represents logging configuration
@@ -173,7 +173,7 @@ func (c *Config) Save(configFile string) error {
 	v.Set("security.mask_by_default", c.Security.MaskByDefault)
 	v.Set("security.session_timeout", c.Security.SessionTimeout)
 	v.Set("security.confirmation_timeout", c.Security.ConfirmationTimeout)
-	v.Set("security.master_password_hash", c.Security.MasterPasswordHash)
+	v.Set("security.protection_password_hash", c.Security.ProtectionPasswordHash)
 	v.Set("logging.level", c.Logging.Level)
 	v.Set("logging.file", c.Logging.File)
 	v.Set("profiles.default", c.Profiles.Default)

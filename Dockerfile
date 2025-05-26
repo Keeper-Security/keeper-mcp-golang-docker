@@ -28,13 +28,16 @@ server:\n\
   timeout: 30s\n\
 \n\
 security:\n\
-  enable_master_password: false\n\
+  enable_protection_password: false\n\
   session_timeout: 24h\n\
   max_failed_attempts: 5\n\
   enable_audit_log: true\n\
+  protection_password_hash: ""\n\
+  auto_approve: false\n\
+  batch_mode: false\n\
 \n\
 profiles:\n\
-  default: ""\n\
+  default: default\n\
 \n\
 logging:\n\
   level: "info"\n\
@@ -94,3 +97,13 @@ EXPOSE 8080
 # Set entrypoint with default command
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["ksm-mcp", "serve"]
+
+# Create a default config file as the keeper user
+# This ensures correct permissions and provides a basic working config.
+# The actual KSM credentials/profile will be initialized via `ksm-mcp init` later.
+USER keeper
+RUN mkdir -p /home/keeper/.keeper/ksm-mcp/logs && \
+    echo "mcp:\n  timeout: 30s\n  rate_limit:\n    requests_per_minute: 60\n    requests_per_hour: 1000\nsecurity:\n  batch_mode: false\n  auto_approve: false\n  mask_by_default: true\n  session_timeout: 15m\n  confirmation_timeout: 30s\n  protection_password_hash: \"\"\nlogging:\n  level: info\n  file: /home/keeper/.keeper/ksm-mcp/logs/audit.log\nprofiles:\n  default: default\n" > /home/keeper/.keeper/ksm-mcp/config.yaml
+
+WORKDIR /app
+COPY --from=builder /app/bin/ksm-mcp /app/ksm-mcp

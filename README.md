@@ -85,7 +85,7 @@ Choose your preferred setup method:
 
 KSM MCP lets AI assistants manage your secrets securely:
 - **What**: Bridge between AI (like Claude) and Keeper Secrets Manager
-- **Why**: AI never sees your KSM credentials or master password
+- **Why**: AI never sees your KSM credentials or protection password
 - **How**: Get base64 config → Run server → AI can now manage secrets
 - **Security**: All sensitive operations require human confirmation
 
@@ -180,9 +180,9 @@ For production deployments, consider:
    ksm-mcp init --config /path/to/ksm-config.json
    ```
 
-2. **Master password protection**:
+2. **Protection password for local profile encryption**:
    ```bash
-   ksm-mcp init --config "BASE64_CONFIG" --master-password
+   ksm-mcp init --config "BASE64_CONFIG" # Omitting --no-protection-password enables it
    ```
 
 3. **Multiple profiles** for different environments:
@@ -226,19 +226,19 @@ See the [Deployment Guide](docs/DEPLOYMENT.md) for detailed production setup.
 
 ## 🔐 Security Features
 
-### Master Password Protection
+### Protection Password for Local Profile Encryption
 
 All KSM credentials are encrypted with AES-256-GCM:
 
 ```bash
-# Set master password on first use
+# Set protection password on first use
 ksm-mcp init --token "TOKEN"
-Enter master password: ****
-Confirm master password: ****
+Enter protection password: ****
+Confirm protection password: ****
 
 # Required on each server start
 ksm-mcp serve
-Enter master password: ****
+Enter protection password: ****
 ```
 
 ### Confirmation Prompts
@@ -455,7 +455,7 @@ keeper://shared_folder/subfolder/record_title/field/username
 | `KSM_MCP_PROFILE` | Default profile name | From config |
 | `KSM_MCP_BATCH_MODE` | Enable batch mode | `false` |
 | `KSM_MCP_LOG_LEVEL` | Logging level | `info` |
-| `KSM_MCP_MASTER_PASSWORD` | Master password (not recommended) | - |
+| `KSM_MCP_PROTECTION_PASSWORD` | Protection password for local profile encryption (not recommended for env var) | - |
 
 ## 📊 Monitoring
 

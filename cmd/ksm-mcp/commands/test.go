@@ -100,8 +100,8 @@ func runTest(cmd *cobra.Command, args []string) error {
 
 	// Create storage
 	var store *storage.ProfileStore
-	if cfg.Security.MasterPasswordHash != "" {
-		fmt.Fprint(os.Stderr, "Enter master password: ")
+	if cfg.Security.ProtectionPasswordHash != "" {
+		fmt.Fprint(os.Stderr, "Enter protection password: ")
 		password, err := readPassword()
 		if err != nil {
 			return fmt.Errorf("failed to read password: %w", err)

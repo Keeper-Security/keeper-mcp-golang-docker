@@ -22,8 +22,8 @@ func TestNewProfileStore(t *testing.T) {
 	store := NewProfileStore(tempDir)
 	defer store.Close()
 
-	// Note: NewProfileStore no longer automatically creates a master key
-	// It's created when needed (e.g., when calling Initialize or CreateProfile)
+	// Note: NewProfileStore no longer automatically creates a protection key or prompts for a password.
+	// Password protection is handled by NewProfileStoreWithPassword or by setting the hash in config first.
 
 	// Verify initial state
 	profiles := store.ListProfiles()

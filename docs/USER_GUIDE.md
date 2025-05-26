@@ -96,11 +96,11 @@ ksm-mcp --version
 
 **Using Docker:**
 ```bash
-# Initialize with base64 config (no master password for quick start)
+# Initialize with base64 config (no protection password for quick start)
 docker run -it --rm \
   -v ~/.keeper/ksm-mcp:/home/ksm/.keeper/ksm-mcp \
   keepersecurityinc/ksm-mcp-poc:latest \
-  init --config "YOUR_BASE64_CONFIG_STRING" --no-master-password
+  init --config "YOUR_BASE64_CONFIG_STRING" --no-protection-password
 
 # Output:
 ✓ Successfully initialized KSM configuration
@@ -111,10 +111,10 @@ docker run -it --rm \
 **Using Binary:**
 ```bash
 # Initialize with base64 config
-ksm-mcp init --config "YOUR_BASE64_CONFIG_STRING" --no-master-password
+ksm-mcp init --config "YOUR_BASE64_CONFIG_STRING" --no-protection-password
 ```
 
-> **Note**: The `--no-master-password` flag skips master password setup for faster onboarding. For production use, omit this flag to add password protection.
+> **Note**: The `--no-protection-password` flag skips protection password setup for faster onboarding. For production use, omit this flag to add password protection.
 
 ### Production Setup (More Secure)
 
@@ -129,14 +129,14 @@ echo '{"clientId":"...","privateKey":"..."}' > ~/keeper/ksm-config.json
 ksm-mcp init --config ~/keeper/ksm-config.json
 ```
 
-#### Option 2: With Master Password
+#### Option 2: With Protection Password
 ```bash
-# Initialize with master password protection
+# Initialize with protection password for local profile encryption
 ksm-mcp init --config "BASE64_CONFIG_STRING"
 
 # You'll be prompted:
-Enter master password: ********
-Confirm master password: ********
+Enter protection password: ********
+Confirm protection password: ********
 ```
 
 #### Option 3: Multiple Profiles
@@ -410,7 +410,7 @@ AI: "I'll get the current TOTP code for GitHub."
 
 #### "Failed to unlock profile store"
 ```bash
-# Wrong master password
+# Wrong protection password
 # Solution: Enter correct password or reset profile
 ksm-mcp profiles delete myprofile
 ksm-mcp init --profile myprofile --token "US:NEW_TOKEN"
@@ -478,7 +478,7 @@ grep "create_secret" ~/.keeper/ksm-mcp/logs/audit.log
 ## Best Practices
 
 ### Security
-1. Use unique master passwords
+1. Use unique protection passwords for each profile store if managing multiple distinct instances.
 2. Enable confirmations for production
 3. Regularly rotate credentials
 4. Monitor audit logs

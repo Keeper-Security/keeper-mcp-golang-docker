@@ -15,7 +15,7 @@ services:
       - KSM_MCP_LOG_LEVEL=${LOG_LEVEL:-info}
       - KSM_MCP_BATCH_MODE=${BATCH_MODE:-false}
       # Optional: for automated environments
-      - KSM_MCP_MASTER_PASSWORD_FILE=/run/secrets/master_password
+      - KSM_MCP_PROTECTION_PASSWORD_SECRET_PATH=/run/secrets/dev_protection_password
     
     # Volumes for persistent data
     volumes:
@@ -34,7 +34,7 @@ services:
     secrets:
       - ksm_token
       - ksm_config
-      - master_password
+      - dev_protection_password
     
     # For interactive mode
     stdin_open: true
@@ -112,6 +112,9 @@ secrets:
     file: ./secrets/ksm_config.json
     # external: true
   
-  master_password:
-    file: ./secrets/master_password.txt
+  dev_protection_password:
+    file: ./secrets/dev_protection_password.txt
     # external: true
+
+  ksm_config_dev:
+    file: ./secrets/ksm_config.json

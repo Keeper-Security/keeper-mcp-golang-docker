@@ -17,8 +17,8 @@ var _ ProfileStoreInterface = (*ProfileStore)(nil)
 const (
 	// ProfilesFileName is the filename for the profiles database
 	ProfilesFileName = "profiles.json"
-	// MasterKeyFileName is the filename for the master key
-	MasterKeyFileName = ".master_key"
+	// ProtectionKeyFileName is the filename for the key derived from the protection password (formerly .master_key)
+	ProtectionKeyFileName = ".protection_key"
 )
 
 // ProfileStore manages encrypted profile storage
@@ -49,7 +49,7 @@ func NewProfileStore(configDir string) *ProfileStore {
 	store := &ProfileStore{
 		configDir: configDir,
 		profiles:  make(map[string]*types.Profile),
-		encryptor: nil, // Explicitly nil for --no-master-password mode
+		encryptor: nil, // Explicitly nil for --no-protection-password mode
 	}
 
 	// Attempt to load existing profiles. Errors are not fatal here during construction;
@@ -216,7 +216,7 @@ func (ps *ProfileStore) saveProfiles() error {
 
 		dataToStore := string(profileDataBytes)
 		if ps.encryptor != nil {
-			// Encrypt profile data if an encryptor is set (master password mode)
+			// Encrypt profile data if an encryptor is set (protection password mode)
 			encryptedData, err := ps.encryptor.EncryptString(string(profileDataBytes))
 			if err != nil {
 				return fmt.Errorf("failed to encrypt profile '%s': %w", name, err)
@@ -378,7 +378,8 @@ func (ps *ProfileStore) Close() error {
 	return nil
 }
 
-// GetPasswordHash returns the hash of the master password
+// GetPasswordHash returns the hash of the protection password
+// used to encrypt/decrypt the profile store.
 func (ps *ProfileStore) GetPasswordHash() string {
 	if ps.encryptor == nil {
 		return ""
@@ -387,7 +388,7 @@ func (ps *ProfileStore) GetPasswordHash() string {
 	// Generate a hash of the password for storage
 	// This is used to verify the password on subsequent runs
 	// We'll use a simple approach here - in production you'd use bcrypt or similar
-	data := []byte("ksm-mcp-master-password-check")
+	data := []byte("ksm-mcp-protection-password-check")
 	encrypted, err := ps.encryptor.EncryptString(string(data))
 	if err != nil {
 		return ""
