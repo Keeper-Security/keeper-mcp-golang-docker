@@ -54,11 +54,7 @@ func NewProfileStore(configDir string) *ProfileStore {
 
 	// Attempt to load existing profiles. Errors are not fatal here during construction;
 	// they might indicate no profiles file exists yet, or other recoverable states.
-	if err := store.loadProfiles(); err != nil {
-		// Log this as a warning or debug message if a logger is available.
-		// For now, we can proceed, as an empty store is valid.
-		// fmt.Fprintf(os.Stderr, "Warning: initial loadProfiles in NewProfileStore failed: %v\n", err)
-	}
+	_ = store.loadProfiles() // Ignore errors during initial construction
 
 	return store
 }
@@ -226,10 +222,8 @@ func (ps *ProfileStore) saveProfiles() error {
 				return fmt.Errorf("failed to encrypt profile '%s': %w", name, err)
 			}
 			dataToStore = encryptedData
-		} else {
-			// No encryptor, store plaintext (ensure this aligns with --no-master-password intent)
-			// The field EncryptedData is a misnomer in this case.
 		}
+		// If no encryptor, dataToStore remains as plaintext
 
 		// Calculate checksum for integrity verification
 		checksum := ps.calculateChecksum(profile.Config)
@@ -302,9 +296,8 @@ func (ps *ProfileStore) loadProfiles() error {
 				continue
 			}
 			profileDataString = decryptedData
-		} else {
-			// No encryptor, data is plaintext (field EncryptedData is a misnomer here)
 		}
+		// If no encryptor, profileDataString remains as stored plaintext
 
 		// Deserialize profile
 		var profile types.Profile

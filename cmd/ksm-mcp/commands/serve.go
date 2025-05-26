@@ -78,9 +78,8 @@ func runServe(cmd *cobra.Command, args []string) error {
 			if prof, err := loadProfileFromBase64(configBase64); err == nil {
 				dockerProfile = prof
 				// fmt.Fprintf(os.Stderr, "Loaded configuration from KSM_CONFIG_BASE64\n")
-			} else {
-				// Failed to load KSM config from environment - logging disabled for MCP protocol
 			}
+			// If loading from environment fails, continue without Docker profile
 		}
 	}
 
@@ -135,12 +134,9 @@ func runServe(cmd *cobra.Command, args []string) error {
 	// fmt.Fprintf(os.Stderr, "Starting KSM MCP server...\n")
 	// fmt.Fprintf(os.Stderr, "Using profile: %s\n", profileName)
 
-	if serveBatch {
-		// Batch mode enabled - logging disabled for MCP protocol
-	}
-	if serveAutoApprove {
-		// Auto-approve enabled - logging disabled for MCP protocol
-	}
+	// Configure server modes based on flags
+	_ = serveBatch       // Batch mode flag processed in server options
+	_ = serveAutoApprove // Auto-approve flag processed in server options
 
 	// Create storage - handle Docker case specially
 	var store storage.ProfileStoreInterface
