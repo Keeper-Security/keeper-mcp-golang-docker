@@ -10,6 +10,7 @@ import (
 	"github.com/keeper-security/ksm-mcp/internal/audit"
 	"github.com/keeper-security/ksm-mcp/internal/storage"
 	"github.com/keeper-security/ksm-mcp/pkg/types"
+	"github.com/stretchr/testify/assert"
 )
 
 // testLogger creates a logger for testing
@@ -193,27 +194,32 @@ func TestServer_RateLimiter(t *testing.T) {
 func TestServer_ProcessMessage(t *testing.T) {
 	storage := &storage.ProfileStore{}
 	logger := testLogger(t)
-	server := NewServer(storage, logger, nil)
+	server := NewServer(storage, logger, &ServerOptions{RateLimit: 1000})
 
 	tests := []struct {
-		name        string
-		message     string
-		expectError bool
+		name               string
+		message            string
+		expectMCPErrorCode *int
 	}{
 		{
-			name:        "valid request",
-			message:     `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`,
-			expectError: false,
+			name:               "valid request tools/list",
+			message:            `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`,
+			expectMCPErrorCode: nil,
 		},
 		{
-			name:        "invalid json",
-			message:     `{invalid json}`,
-			expectError: true,
+			name:               "invalid json",
+			message:            `{invalid json}`,
+			expectMCPErrorCode: Pint(-32700),
 		},
 		{
-			name:        "unknown method",
-			message:     `{"jsonrpc":"2.0","id":1,"method":"unknown/method"}`,
-			expectError: true,
+			name:               "unknown method",
+			message:            `{"jsonrpc":"2.0","id":1,"method":"unknown/method"}`,
+			expectMCPErrorCode: Pint(-32601),
+		},
+		{
+			name:               "notification unknown method",
+			message:            `{"jsonrpc":"2.0","method":"unknown/notification"}`,
+			expectMCPErrorCode: nil,
 		},
 	}
 
@@ -222,25 +228,41 @@ func TestServer_ProcessMessage(t *testing.T) {
 			var buf bytes.Buffer
 			writer := bufio.NewWriter(&buf)
 
-			err := server.processMessage([]byte(tt.message), writer)
+			funcErr := server.processMessage([]byte(tt.message), writer)
 			writer.Flush()
 
-			if tt.expectError && err == nil {
-				t.Error("expected error but got none")
-			}
-			if !tt.expectError && err != nil {
-				t.Errorf("unexpected error: %v", err)
+			assert.NoError(t, funcErr, "processMessage itself should not return an error")
+
+			responseBytes := buf.Bytes()
+			if tt.expectMCPErrorCode != nil && len(responseBytes) == 0 {
+				assert.FailNow(t, "Expected an MCP error response, but buffer is empty", "Test case: %s", tt.name)
 			}
 
-			// Check response format
-			if buf.Len() > 0 {
+			if tt.expectMCPErrorCode != nil {
+				assert.True(t, len(responseBytes) > 0, "Expected an MCP response, but buffer is empty. Test case: %s", tt.name)
 				var response types.MCPResponse
-				if err := json.Unmarshal(buf.Bytes(), &response); err != nil {
-					t.Errorf("failed to parse response: %v", err)
+				err := json.Unmarshal(responseBytes, &response)
+				assert.NoError(t, err, "Failed to unmarshal MCP response: %s", buf.String())
+				assert.NotNil(t, response.Error, "Expected an MCP error object in the response")
+				if response.Error != nil {
+					assert.Equal(t, *tt.expectMCPErrorCode, response.Error.Code, "MCP error code mismatch")
+				}
+			} else {
+				if tt.name == "notification unknown method" {
+					assert.Equal(t, 0, buf.Len(), "Expected no response for an unknown notification")
+				} else if buf.Len() > 0 {
+					var response types.MCPResponse
+					err := json.Unmarshal(buf.Bytes(), &response)
+					assert.NoError(t, err, "Failed to unmarshal MCP response: %s", buf.String())
+					assert.Nil(t, response.Error, "Expected no MCP error object, but got one: %+v", response.Error)
 				}
 			}
 		})
 	}
+}
+
+func Pint(i int) *int {
+	return &i
 }
 
 func TestServer_GetAvailableTools(t *testing.T) {

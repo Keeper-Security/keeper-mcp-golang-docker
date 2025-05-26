@@ -248,21 +248,30 @@ func TestServer_NoActiveSessionSecurity(t *testing.T) {
 	writer := bufio.NewWriter(&buf)
 
 	reqData, _ := json.Marshal(request)
-	err := server.processMessage(reqData, writer)
+	// processMessage is expected to return nil even on error, as it sends an MCP error response.
+	processingErr := server.processMessage(reqData, writer)
 	writer.Flush()
 
-	if err == nil {
-		t.Error("expected error when calling tool without session")
+	if processingErr != nil {
+		t.Errorf("processMessage returned an unexpected error: %v", processingErr)
+	}
+
+	responseBytes := buf.Bytes()
+	if len(responseBytes) == 0 {
+		t.Fatal("MCP response buffer is empty after processMessage call that should have produced an error")
 	}
 
 	var response types.MCPResponse
-	_ = json.Unmarshal(buf.Bytes(), &response)
+	jsonErr := json.Unmarshal(buf.Bytes(), &response)
+	if jsonErr != nil {
+		t.Fatalf("Failed to unmarshal MCP response: %v. Raw response: %s", jsonErr, buf.String())
+	}
 
 	if response.Error == nil {
-		t.Error("expected error response")
+		t.Fatal("expected error response from MCP server, but got no error")
 	}
 	if !strings.Contains(response.Error.Message, "no active session") {
-		t.Errorf("expected 'no active session' error, got: %s", response.Error.Message)
+		t.Errorf("expected MCP error message to contain 'no active session', got: %s", response.Error.Message)
 	}
 }
 
