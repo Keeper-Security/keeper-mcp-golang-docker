@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/keeper-security/ksm-mcp/internal/audit"
 	"github.com/keeper-security/ksm-mcp/pkg/types"
 )
 
@@ -53,27 +54,63 @@ func (s *Server) executeGetSecret(client KSMClient, args json.RawMessage) (inter
 	}
 
 	if err := json.Unmarshal(args, &params); err != nil {
-		return nil, fmt.Errorf("invalid parameters: %w", err)
+		return nil, fmt.Errorf("invalid parameters for get_secret: %w", err)
 	}
 
-	// Confirm if unmasking
-	if params.Unmask {
-		ctx := context.Background()
-		result := s.confirmer.Confirm(ctx, fmt.Sprintf("Reveal unmasked secret %s?", params.UID))
-		if result.Error != nil {
-			return nil, fmt.Errorf("confirmation failed: %w", result.Error)
+	if !params.Unmask || s.options.BatchMode || s.options.AutoApprove {
+		if params.Unmask {
+			s.logger.LogSystem(audit.EventAccess, "GetSecret (Unmask): Batch/AutoApprove mode, executing directly", map[string]interface{}{
+				"profile": s.currentProfile,
+				"uid":     params.UID,
+			})
+			return s.executeGetSecretConfirmed(client, args)
+		} else {
+			s.logger.LogSystem(audit.EventAccess, "GetSecret (Masked): Executing directly", map[string]interface{}{
+				"profile": s.currentProfile,
+				"uid":     params.UID,
+			})
+			secret, err := client.GetSecret(params.UID, params.Fields, false)
+			if err != nil {
+				return nil, err
+			}
+			return secret, nil
 		}
-		if !result.Approved {
-			return nil, fmt.Errorf("operation cancelled by user")
+	}
+
+	// Confirmation is required for unmasking
+	// Attempt to get secret title for a more descriptive message, ignore error if not found
+	secretTitle := params.UID                                    // Default to UID if title can't be fetched
+	meta, err := client.GetSecret(params.UID, []string{}, false) // Get metadata (title) without unmasking
+	if err == nil {
+		if title, ok := meta["title"].(string); ok && title != "" {
+			secretTitle = fmt.Sprintf("'%s' (UID: %s)", title, params.UID)
 		}
 	}
 
-	secret, err := client.GetSecret(params.UID, params.Fields, params.Unmask)
-	if err != nil {
-		return nil, err
+	actionDescription := fmt.Sprintf("Reveal unmasked secret %s", secretTitle)
+	warningMessage := "This will expose all requested fields of the secret, including the password if present, directly TO THE AI MODEL and its context. This information could be logged or stored by the AI service."
+	originalToolArgsJSON := string(args)
+
+	confirmationDetails := map[string]interface{}{
+		"prompt_name": "ksm_confirm_action",
+		"prompt_arguments": map[string]interface{}{
+			"action_description":      actionDescription,
+			"warning_message":         warningMessage,
+			"original_tool_name":      "get_secret",
+			"original_tool_args_json": originalToolArgsJSON,
+		},
 	}
 
-	return secret, nil
+	s.logger.LogSystem(audit.EventAccess, "GetSecret (Unmask): Confirmation required", map[string]interface{}{
+		"profile": s.currentProfile,
+		"uid":     params.UID,
+	})
+
+	return map[string]interface{}{
+		"status":               "confirmation_required",
+		"message":              fmt.Sprintf("Confirmation required to %s. Use the 'ksm_confirm_action' prompt.", actionDescription),
+		"confirmation_details": confirmationDetails,
+	}, nil
 }
 
 // executeSearchSecrets handles the search_secrets tool
@@ -243,132 +280,192 @@ func (s *Server) executeGetTOTPCode(client KSMClient, args json.RawMessage) (int
 
 // executeCreateSecret handles the create_secret tool
 func (s *Server) executeCreateSecret(client KSMClient, args json.RawMessage) (interface{}, error) {
-	var params types.CreateSecretParams
+	// For batch or auto-approve mode, the new ksm_execute_confirmed_action tool will handle it directly.
+	// So, if we are here, it means interactive confirmation *would* have been needed.
+	// We now return a structured response indicating confirmation is required via a prompt.
 
-	if err := json.Unmarshal(args, &params); err != nil {
-		return nil, fmt.Errorf("invalid parameters: %w", err)
-	}
-
-	// Confirm creation
-	ctx := context.Background()
-	result := s.confirmer.Confirm(ctx, fmt.Sprintf("Create new secret '%s'?", params.Title))
-	if result.Error != nil {
-		return nil, fmt.Errorf("confirmation failed: %w", result.Error)
-	}
-	if !result.Approved {
-		return nil, fmt.Errorf("operation cancelled by user")
+	// First, parse the arguments to get necessary details for the confirmation message,
+	// like the title. We don't need the full KSMClient here yet.
+	var paramsForDesc types.CreateSecretParams // Use the existing struct for easy parsing of title, etc.
+	if err := json.Unmarshal(args, &paramsForDesc); err != nil {
+		// If basic parsing fails, it's an invalid request anyway.
+		return nil, fmt.Errorf("invalid parameters for create_secret: %w", err)
 	}
 
-	uid, err := client.CreateSecret(params)
-	if err != nil {
-		return nil, err
+	// Check if server is in batch or auto-approve mode via its options
+	if s.options.BatchMode || s.options.AutoApprove {
+		// If in batch or auto-approve, proceed to execute directly.
+		// This reuses the logic now in executeCreateSecretConfirmed.
+		// This path assumes the AI client understands not to expect a prompt workflow
+		// if the server is in batch/auto-approve (though ideally, client checks server capabilities).
+		// Alternatively, even in batch mode, we could return the prompt structure,
+		// and ksm_execute_confirmed_action would respect batch mode from its call.
+		// For simplicity now: direct execution if batch/auto-approve.
+		s.logger.LogSystem(audit.EventAccess, "CreateSecret: Batch/AutoApprove mode, executing directly", map[string]interface{}{
+			"profile": s.currentProfile,
+			"title":   paramsForDesc.Title,
+		})
+		return s.executeCreateSecretConfirmed(client, args)
 	}
+
+	actionDescription := fmt.Sprintf("Create new KSM secret titled '%s' of type '%s'", paramsForDesc.Title, paramsForDesc.Type)
+	warningMessage := "This will create a new entry in your Keeper vault."
+
+	originalToolArgsJSON := string(args)
+
+	confirmationDetails := map[string]interface{}{
+		"prompt_name": "ksm_confirm_action",
+		"prompt_arguments": map[string]interface{}{
+			"action_description":      actionDescription,
+			"warning_message":         warningMessage,
+			"original_tool_name":      "create_secret",
+			"original_tool_args_json": originalToolArgsJSON,
+		},
+	}
+
+	s.logger.LogSystem(audit.EventAccess, "CreateSecret: Confirmation required", map[string]interface{}{
+		"profile": s.currentProfile,
+		"title":   paramsForDesc.Title,
+	})
 
 	return map[string]interface{}{
-		"uid":     uid,
-		"title":   params.Title,
-		"message": "Secret created successfully",
+		"status":               "confirmation_required",
+		"message":              fmt.Sprintf("Confirmation required to %s. Use the 'ksm_confirm_action' prompt.", actionDescription),
+		"confirmation_details": confirmationDetails,
 	}, nil
 }
 
 // executeUpdateSecret handles the update_secret tool
 func (s *Server) executeUpdateSecret(client KSMClient, args json.RawMessage) (interface{}, error) {
-	var params types.UpdateSecretParams
-
-	if err := json.Unmarshal(args, &params); err != nil {
-		return nil, fmt.Errorf("invalid parameters: %w", err)
+	var paramsForDesc types.UpdateSecretParams // Use for parsing UID for messages
+	if err := json.Unmarshal(args, &paramsForDesc); err != nil {
+		return nil, fmt.Errorf("invalid parameters for update_secret: %w", err)
 	}
 
-	// Confirm update
-	ctx := context.Background()
-	result := s.confirmer.Confirm(ctx, fmt.Sprintf("Update secret %s?", params.UID))
-	if result.Error != nil {
-		return nil, fmt.Errorf("confirmation failed: %w", result.Error)
-	}
-	if !result.Approved {
-		return nil, fmt.Errorf("operation cancelled by user")
+	if s.options.BatchMode || s.options.AutoApprove {
+		s.logger.LogSystem(audit.EventAccess, "UpdateSecret: Batch/AutoApprove mode, executing directly", map[string]interface{}{
+			"profile": s.currentProfile,
+			"uid":     paramsForDesc.UID,
+		})
+		return s.executeUpdateSecretConfirmed(client, args)
 	}
 
-	if err := client.UpdateSecret(params); err != nil {
-		return nil, err
+	actionDescription := fmt.Sprintf("Update KSM secret (UID: %s)", paramsForDesc.UID)
+	if paramsForDesc.Title != "" {
+		actionDescription = fmt.Sprintf("Update KSM secret '%s' (UID: %s)", paramsForDesc.Title, paramsForDesc.UID)
 	}
+	warningMessage := "This will modify an existing entry in your Keeper vault."
+	originalToolArgsJSON := string(args)
+
+	confirmationDetails := map[string]interface{}{
+		"prompt_name": "ksm_confirm_action",
+		"prompt_arguments": map[string]interface{}{
+			"action_description":      actionDescription,
+			"warning_message":         warningMessage,
+			"original_tool_name":      "update_secret",
+			"original_tool_args_json": originalToolArgsJSON,
+		},
+	}
+
+	s.logger.LogSystem(audit.EventAccess, "UpdateSecret: Confirmation required", map[string]interface{}{
+		"profile": s.currentProfile,
+		"uid":     paramsForDesc.UID,
+	})
 
 	return map[string]interface{}{
-		"uid":     params.UID,
-		"message": "Secret updated successfully",
+		"status":               "confirmation_required",
+		"message":              fmt.Sprintf("Confirmation required to %s. Use the 'ksm_confirm_action' prompt.", actionDescription),
+		"confirmation_details": confirmationDetails,
 	}, nil
 }
 
 // executeDeleteSecret handles the delete_secret tool
 func (s *Server) executeDeleteSecret(client KSMClient, args json.RawMessage) (interface{}, error) {
-	var params struct {
+	var paramsForDesc struct { // Use for parsing UID for messages
 		UID string `json:"uid"`
 	}
-
-	if err := json.Unmarshal(args, &params); err != nil {
-		return nil, fmt.Errorf("invalid parameters: %w", err)
+	if err := json.Unmarshal(args, &paramsForDesc); err != nil {
+		return nil, fmt.Errorf("invalid parameters for delete_secret: %w", err)
 	}
 
-	// Double confirm deletion
-	ctx := context.Background()
-	result := s.confirmer.Confirm(ctx, fmt.Sprintf("Delete secret %s? This cannot be undone!", params.UID))
-	if result.Error != nil {
-		return nil, fmt.Errorf("confirmation failed: %w", result.Error)
-	}
-	if !result.Approved {
-		return nil, fmt.Errorf("operation cancelled by user")
+	if s.options.BatchMode || s.options.AutoApprove {
+		s.logger.LogSystem(audit.EventAccess, "DeleteSecret: Batch/AutoApprove mode, executing directly", map[string]interface{}{
+			"profile": s.currentProfile,
+			"uid":     paramsForDesc.UID,
+		})
+		return s.executeDeleteSecretConfirmed(client, args)
 	}
 
-	// Second confirmation for safety
-	result = s.confirmer.Confirm(ctx, "Are you absolutely sure? Type 'yes' to confirm deletion.")
-	if result.Error != nil {
-		return nil, fmt.Errorf("confirmation failed: %w", result.Error)
-	}
-	if !result.Approved {
-		return nil, fmt.Errorf("operation cancelled by user")
+	actionDescription := fmt.Sprintf("Permanently delete KSM secret (UID: %s)", paramsForDesc.UID)
+	warningMessage := "This action CANNOT BE UNDONE. The secret will be permanently removed from your Keeper vault."
+	originalToolArgsJSON := string(args)
+
+	confirmationDetails := map[string]interface{}{
+		"prompt_name": "ksm_confirm_action",
+		"prompt_arguments": map[string]interface{}{
+			"action_description":      actionDescription,
+			"warning_message":         warningMessage,
+			"original_tool_name":      "delete_secret",
+			"original_tool_args_json": originalToolArgsJSON,
+		},
 	}
 
-	if err := client.DeleteSecret(params.UID, true); err != nil {
-		return nil, err
-	}
+	s.logger.LogSystem(audit.EventAccess, "DeleteSecret: Confirmation required", map[string]interface{}{
+		"profile": s.currentProfile,
+		"uid":     paramsForDesc.UID,
+	})
 
 	return map[string]interface{}{
-		"uid":     params.UID,
-		"message": "Secret deleted successfully",
+		"status":               "confirmation_required",
+		"message":              fmt.Sprintf("Confirmation required to %s. Use the 'ksm_confirm_action' prompt.", actionDescription),
+		"confirmation_details": confirmationDetails,
 	}, nil
 }
 
 // executeUploadFile handles the upload_file tool
 func (s *Server) executeUploadFile(client KSMClient, args json.RawMessage) (interface{}, error) {
-	var params struct {
+	var paramsForDesc struct { // Use for parsing details for messages
 		UID      string `json:"uid"`
 		FilePath string `json:"file_path"`
 		Title    string `json:"title"`
 	}
-
-	if err := json.Unmarshal(args, &params); err != nil {
-		return nil, fmt.Errorf("invalid parameters: %w", err)
+	if err := json.Unmarshal(args, &paramsForDesc); err != nil {
+		return nil, fmt.Errorf("invalid parameters for upload_file: %w", err)
 	}
 
-	// Confirm upload
-	ctx := context.Background()
-	result := s.confirmer.Confirm(ctx, fmt.Sprintf("Upload file %s to secret %s?", params.FilePath, params.UID))
-	if result.Error != nil {
-		return nil, fmt.Errorf("confirmation failed: %w", result.Error)
-	}
-	if !result.Approved {
-		return nil, fmt.Errorf("operation cancelled by user")
+	if s.options.BatchMode || s.options.AutoApprove {
+		s.logger.LogSystem(audit.EventAccess, "UploadFile: Batch/AutoApprove mode, executing directly", map[string]interface{}{
+			"profile": s.currentProfile,
+			"uid":     paramsForDesc.UID,
+			"file":    paramsForDesc.Title,
+		})
+		return s.executeUploadFileConfirmed(client, args)
 	}
 
-	// UploadFile expects (uid, filePath, title)
-	if err := client.UploadFile(params.UID, params.FilePath, params.Title); err != nil {
-		return nil, err
+	actionDescription := fmt.Sprintf("Upload file '%s' (as title '%s') to KSM secret (UID: %s)", paramsForDesc.FilePath, paramsForDesc.Title, paramsForDesc.UID)
+	warningMessage := "This will add a file attachment to an existing secret in your Keeper vault."
+	originalToolArgsJSON := string(args)
+
+	confirmationDetails := map[string]interface{}{
+		"prompt_name": "ksm_confirm_action",
+		"prompt_arguments": map[string]interface{}{
+			"action_description":      actionDescription,
+			"warning_message":         warningMessage,
+			"original_tool_name":      "upload_file",
+			"original_tool_args_json": originalToolArgsJSON,
+		},
 	}
+
+	s.logger.LogSystem(audit.EventAccess, "UploadFile: Confirmation required", map[string]interface{}{
+		"profile":  s.currentProfile,
+		"uid":      paramsForDesc.UID,
+		"filePath": paramsForDesc.FilePath,
+	})
 
 	return map[string]interface{}{
-		"uid":     params.UID,
-		"file":    params.Title,
-		"message": "File uploaded successfully",
+		"status":               "confirmation_required",
+		"message":              fmt.Sprintf("Confirmation required to %s. Use the 'ksm_confirm_action' prompt.", actionDescription),
+		"confirmation_details": confirmationDetails,
 	}, nil
 }
 
@@ -413,33 +510,47 @@ func (s *Server) executeListFolders(client KSMClient, args json.RawMessage) (int
 
 // executeCreateFolder handles the create_folder tool
 func (s *Server) executeCreateFolder(client KSMClient, args json.RawMessage) (interface{}, error) {
-	var params struct {
+	var paramsForDesc struct { // Use for parsing details for messages
 		Name      string `json:"name"`
 		ParentUID string `json:"parent_uid,omitempty"`
 	}
-
-	if err := json.Unmarshal(args, &params); err != nil {
-		return nil, fmt.Errorf("invalid parameters: %w", err)
+	if err := json.Unmarshal(args, &paramsForDesc); err != nil {
+		return nil, fmt.Errorf("invalid parameters for create_folder: %w", err)
 	}
 
-	// Confirm creation
-	ctx := context.Background()
-	result := s.confirmer.Confirm(ctx, fmt.Sprintf("Create folder '%s'?", params.Name))
-	if result.Error != nil {
-		return nil, fmt.Errorf("confirmation failed: %w", result.Error)
-	}
-	if !result.Approved {
-		return nil, fmt.Errorf("operation cancelled by user")
+	if s.options.BatchMode || s.options.AutoApprove {
+		s.logger.LogSystem(audit.EventAccess, "CreateFolder: Batch/AutoApprove mode, executing directly", map[string]interface{}{
+			"profile": s.currentProfile,
+			"name":    paramsForDesc.Name,
+		})
+		return s.executeCreateFolderConfirmed(client, args)
 	}
 
-	uid, err := client.CreateFolder(params.Name, params.ParentUID)
-	if err != nil {
-		return nil, err
+	actionDescription := fmt.Sprintf("Create new KSM folder titled '%s'", paramsForDesc.Name)
+	if paramsForDesc.ParentUID != "" {
+		actionDescription += fmt.Sprintf(" inside folder UID %s", paramsForDesc.ParentUID)
 	}
+	warningMessage := "This will create a new folder in your Keeper vault."
+	originalToolArgsJSON := string(args)
+
+	confirmationDetails := map[string]interface{}{
+		"prompt_name": "ksm_confirm_action",
+		"prompt_arguments": map[string]interface{}{
+			"action_description":      actionDescription,
+			"warning_message":         warningMessage,
+			"original_tool_name":      "create_folder",
+			"original_tool_args_json": originalToolArgsJSON,
+		},
+	}
+
+	s.logger.LogSystem(audit.EventAccess, "CreateFolder: Confirmation required", map[string]interface{}{
+		"profile": s.currentProfile,
+		"name":    paramsForDesc.Name,
+	})
 
 	return map[string]interface{}{
-		"uid":     uid,
-		"name":    params.Name,
-		"message": "Folder created successfully",
+		"status":               "confirmation_required",
+		"message":              fmt.Sprintf("Confirmation required to %s. Use the 'ksm_confirm_action' prompt.", actionDescription),
+		"confirmation_details": confirmationDetails,
 	}, nil
 }

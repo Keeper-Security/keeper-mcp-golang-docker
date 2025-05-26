@@ -17,15 +17,20 @@ import (
 	"github.com/keeper-security/ksm-mcp/pkg/types"
 )
 
+// KSMClientProvider defines a function type that can return a KSMClient.
+// This allows for easier mocking in tests.
+type KSMClientProvider func() (KSMClient, error)
+
 // Server implements the MCP protocol server
 type Server struct {
-	storage        storage.ProfileStoreInterface
-	profiles       map[string]KSMClient
-	currentProfile string
-	logger         *audit.Logger
-	confirmer      ConfirmerInterface
-	options        *ServerOptions
-	mu             sync.RWMutex
+	storage          storage.ProfileStoreInterface
+	profiles         map[string]KSMClient
+	currentProfile   string
+	logger           *audit.Logger
+	confirmer        ConfirmerInterface
+	options          *ServerOptions
+	mu               sync.RWMutex
+	getCurrentClient KSMClientProvider
 
 	// Rate limiting
 	rateLimiter *RateLimiter
@@ -60,7 +65,7 @@ func NewServer(storage storage.ProfileStoreInterface, logger *audit.Logger, opti
 		DefaultDeny: false,
 	}
 
-	return &Server{
+	s := &Server{
 		storage:     storage,
 		profiles:    make(map[string]KSMClient),
 		logger:      logger,
@@ -70,6 +75,31 @@ func NewServer(storage storage.ProfileStoreInterface, logger *audit.Logger, opti
 		sessionID:   generateSessionID(),
 		startTime:   time.Now(),
 	}
+	s.getCurrentClient = s.defaultGetCurrentClientImpl
+	return s
+}
+
+// defaultGetCurrentClientImpl is the actual implementation for getting the current KSM client.
+func (s *Server) defaultGetCurrentClientImpl() (KSMClient, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.currentProfile == "" {
+		return nil, fmt.Errorf("no profile selected or active")
+	}
+
+	client, exists := s.profiles[s.currentProfile]
+	if !exists {
+		if err := s.loadProfile(s.currentProfile); err != nil {
+			return nil, fmt.Errorf("profile '%s' not loaded and failed to load: %w", s.currentProfile, err)
+		}
+		client, exists = s.profiles[s.currentProfile]
+		if !exists {
+			return nil, fmt.Errorf("profile '%s' loaded but not found in map, internal error", s.currentProfile)
+		}
+	}
+
+	return client, nil
 }
 
 // Start starts the MCP server
@@ -84,9 +114,13 @@ func (s *Server) Start(ctx context.Context) error {
 	// Load initial profile if specified
 	if s.options.ProfileName != "" {
 		if err := s.loadProfile(s.options.ProfileName); err != nil {
-			return fmt.Errorf("failed to load profile %s: %w", s.options.ProfileName, err)
+			s.logger.LogError("startup", fmt.Errorf("failed to load initial profile '%s': %w", s.options.ProfileName, err), nil)
+			return fmt.Errorf("failed to load initial profile '%s': %w", s.options.ProfileName, err)
 		}
 		s.currentProfile = s.options.ProfileName
+		s.logger.LogSystem(audit.EventStartup, "Initial profile loaded", map[string]interface{}{"profile": s.currentProfile})
+	} else {
+		s.logger.LogSystem(audit.EventStartup, "No initial profile specified, server will wait for session/create or use direct config if available.", nil)
 	}
 
 	// Start reading from stdin
@@ -149,10 +183,7 @@ func (s *Server) processMessage(data []byte, writer *bufio.Writer) error {
 	switch request.Method {
 	case "initialize":
 		return s.handleInitialize(request, writer)
-	case "initialized":
-		return s.handleInitialized(request, writer)
-	case "notifications/initialized":
-		// This is a notification, no response needed
+	case "initialized", "notifications/initialized": // Handle notification variant too
 		return s.handleInitialized(request, writer)
 	case "tools/list":
 		return s.handleToolsList(request, writer)
@@ -165,15 +196,20 @@ func (s *Server) processMessage(data []byte, writer *bufio.Writer) error {
 	case "sessions/end":
 		return s.handleSessionEnd(request, writer)
 	case "resources/list":
-		// Resources not supported, send empty list
+		// Resources not supported yet, send empty list
 		return s.sendResponse(writer, request.ID, map[string]interface{}{
 			"resources": []interface{}{},
 		})
-	case "prompts/list":
-		// Prompts not supported, send empty list
-		return s.sendResponse(writer, request.ID, map[string]interface{}{
-			"prompts": []interface{}{},
-		})
+	case "prompts/list": // New handler for listing prompts
+		prompts := s.getAvailablePrompts()
+		return s.sendResponse(writer, request.ID, map[string]interface{}{"prompts": prompts})
+	case "prompts/get": // New handler for getting a specific prompt
+		promptResult, err := s.handleGetPrompt(request) // Assumes handleGetPrompt is now part of Server methods
+		if err != nil {
+			_ = s.sendErrorResponse(writer, request.ID, -32003, fmt.Sprintf("Error getting prompt: %s", err.Error()), nil)
+			return nil
+		}
+		return s.sendResponse(writer, request.ID, promptResult)
 	default:
 		// Only send error response if this is a request (has an ID)
 		if request.ID != nil {
@@ -214,23 +250,6 @@ func (s *Server) loadProfile(name string) error {
 	return nil
 }
 
-// getCurrentClient returns the current KSM client
-func (s *Server) getCurrentClient() (KSMClient, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	if s.currentProfile == "" {
-		return nil, fmt.Errorf("no profile selected")
-	}
-
-	client, exists := s.profiles[s.currentProfile]
-	if !exists {
-		return nil, fmt.Errorf("profile not loaded: %s", s.currentProfile)
-	}
-
-	return client, nil
-}
-
 // sendResponse sends a JSON-RPC response
 func (s *Server) sendResponse(writer *bufio.Writer, id interface{}, result interface{}) error {
 	response := types.MCPResponse{
@@ -243,7 +262,7 @@ func (s *Server) sendResponse(writer *bufio.Writer, id interface{}, result inter
 	if err != nil {
 		return fmt.Errorf("failed to marshal response: %w", err)
 	}
-	
+
 	// Debug log the response
 	// fmt.Fprintf(os.Stderr, "DEBUG: Sending response: %s\n", string(data))
 
@@ -290,3 +309,6 @@ func (s *Server) sendErrorResponse(writer *bufio.Writer, id interface{}, code in
 func generateSessionID() string {
 	return fmt.Sprintf("mcp-%d", time.Now().Unix())
 }
+
+// handleToolCall processes a tools/call request
+// func (s *Server) handleToolCall(request types.MCPRequest, writer *bufio.Writer) error {

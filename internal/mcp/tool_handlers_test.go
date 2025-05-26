@@ -127,51 +127,50 @@ func (m *mockConfirmer) ConfirmOperation(ctx context.Context, operation, resourc
 // Test CREATE operation
 func TestExecuteCreateSecret(t *testing.T) {
 	tests := []struct {
-		name        string
-		args        json.RawMessage
-		confirm     bool
-		expectError bool
-		mockSetup   func(*mockKSMClient, *mockConfirmer)
+		name          string
+		args          json.RawMessage
+		serverOptions *ServerOptions
+		expectError   bool
+		mockSetup     func(*mockKSMClient, *mockConfirmer)
+		validate      func(*testing.T, interface{})
 	}{
 		{
-			name:        "successful create",
-			args:        json.RawMessage(`{"type":"login","title":"Test Secret","fields":[]}`),
-			confirm:     true,
-			expectError: false,
-			mockSetup: func(client *mockKSMClient, confirmer *mockConfirmer) {
-				confirmer.On("Confirm", mock.Anything, "Create new secret 'Test Secret'?").
-					Return(&ui.ConfirmationResult{Approved: true})
-				client.On("CreateSecret", mock.MatchedBy(func(p types.CreateSecretParams) bool {
-					return p.Title == "Test Secret" && p.Type == "login"
-				})).Return("test-uid-123", nil)
+			name:          "successful create - confirmation path",
+			args:          json.RawMessage(`{"type":"login","title":"Test Secret C","fields":[]}`),
+			serverOptions: &ServerOptions{BatchMode: false, AutoApprove: false},
+			expectError:   false,
+			mockSetup:     func(client *mockKSMClient, confirmer *mockConfirmer) {},
+			validate: func(t *testing.T, result interface{}) {
+				resultMap := result.(map[string]interface{})
+				assert.Equal(t, "confirmation_required", resultMap["status"])
+				assert.Contains(t, resultMap["message"].(string), "Confirmation required to Create new KSM secret titled 'Test Secret C'")
+				details, ok := resultMap["confirmation_details"].(map[string]interface{})
+				assert.True(t, ok)
+				assert.Equal(t, "ksm_confirm_action", details["prompt_name"])
+				promptArgs, _ := details["prompt_arguments"].(map[string]interface{})
+				assert.Equal(t, "create_secret", promptArgs["original_tool_name"])
 			},
 		},
 		{
-			name:        "user denies confirmation",
-			args:        json.RawMessage(`{"type":"login","title":"Test Secret","fields":[]}`),
-			confirm:     false,
-			expectError: true,
+			name:          "successful create - batch mode",
+			args:          json.RawMessage(`{"type":"login","title":"Test Secret B","fields":[]}`),
+			serverOptions: &ServerOptions{BatchMode: true, AutoApprove: false},
+			expectError:   false,
 			mockSetup: func(client *mockKSMClient, confirmer *mockConfirmer) {
-				confirmer.On("Confirm", mock.Anything, "Create new secret 'Test Secret'?").
-					Return(&ui.ConfirmationResult{Approved: false})
+				client.On("CreateSecret", mock.AnythingOfType("types.CreateSecretParams")).Return("test-uid-batch", nil)
+			},
+			validate: func(t *testing.T, result interface{}) {
+				resultMap := result.(map[string]interface{})
+				assert.Equal(t, "test-uid-batch", resultMap["uid"])
+				assert.Equal(t, "Secret created successfully (confirmed).", resultMap["message"])
 			},
 		},
 		{
-			name:        "invalid JSON parameters",
-			args:        json.RawMessage(`{"invalid json`),
-			expectError: true,
-			mockSetup:   func(client *mockKSMClient, confirmer *mockConfirmer) {},
-		},
-		{
-			name:        "KSM client error",
-			args:        json.RawMessage(`{"type":"login","title":"Test Secret","fields":[]}`),
-			confirm:     true,
-			expectError: true,
-			mockSetup: func(client *mockKSMClient, confirmer *mockConfirmer) {
-				confirmer.On("Confirm", mock.Anything, "Create new secret 'Test Secret'?").
-					Return(&ui.ConfirmationResult{Approved: true})
-				client.On("CreateSecret", mock.Anything).Return("", errors.New("KSM error"))
-			},
+			name:          "invalid JSON parameters",
+			args:          json.RawMessage(`{"invalid json`),
+			serverOptions: &ServerOptions{BatchMode: false, AutoApprove: false},
+			expectError:   true,
+			mockSetup:     func(client *mockKSMClient, confirmer *mockConfirmer) {},
 		},
 	}
 
@@ -180,7 +179,6 @@ func TestExecuteCreateSecret(t *testing.T) {
 			mockClient := new(mockKSMClient)
 			mockConfirmer := new(mockConfirmer)
 
-			// Create a test logger
 			logger, _ := audit.NewLogger(audit.Config{
 				FilePath: "/tmp/test-audit.log",
 			})
@@ -188,9 +186,19 @@ func TestExecuteCreateSecret(t *testing.T) {
 			server := &Server{
 				confirmer: mockConfirmer,
 				logger:    logger,
+				options:   tt.serverOptions,
+			}
+			server.getCurrentClient = server.defaultGetCurrentClientImpl
+
+			if tt.mockSetup != nil {
+				tt.mockSetup(mockClient, mockConfirmer)
 			}
 
-			tt.mockSetup(mockClient, mockConfirmer)
+			if tt.serverOptions.BatchMode || tt.serverOptions.AutoApprove {
+				server.getCurrentClient = func() (KSMClient, error) {
+					return mockClient, nil
+				}
+			}
 
 			result, err := server.executeCreateSecret(mockClient, tt.args)
 
@@ -199,9 +207,9 @@ func TestExecuteCreateSecret(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 				assert.NotNil(t, result)
-				resultMap := result.(map[string]interface{})
-				assert.Equal(t, "test-uid-123", resultMap["uid"])
-				assert.Equal(t, "Test Secret", resultMap["title"])
+				if tt.validate != nil {
+					tt.validate(t, result)
+				}
 			}
 
 			mockClient.AssertExpectations(t)
@@ -292,15 +300,18 @@ func TestExecuteListSecrets(t *testing.T) {
 
 func TestExecuteGetSecret(t *testing.T) {
 	tests := []struct {
-		name        string
-		args        json.RawMessage
-		expectError bool
-		mockSetup   func(*mockKSMClient, *mockConfirmer)
+		name          string
+		args          json.RawMessage
+		serverOptions *ServerOptions
+		expectError   bool
+		mockSetup     func(*mockKSMClient, *mockConfirmer)
+		validate      func(*testing.T, interface{})
 	}{
 		{
-			name:        "get secret masked",
-			args:        json.RawMessage(`{"uid":"test-uid","unmask":false}`),
-			expectError: false,
+			name:          "get secret masked",
+			args:          json.RawMessage(`{"uid":"test-uid","unmask":false}`),
+			serverOptions: &ServerOptions{BatchMode: false, AutoApprove: false},
+			expectError:   false,
 			mockSetup: func(client *mockKSMClient, confirmer *mockConfirmer) {
 				client.On("GetSecret", "test-uid", []string(nil), false).Return(map[string]interface{}{
 					"uid":   "test-uid",
@@ -308,28 +319,36 @@ func TestExecuteGetSecret(t *testing.T) {
 					"type":  "login",
 				}, nil)
 			},
-		},
-		{
-			name:        "get secret unmasked with confirmation",
-			args:        json.RawMessage(`{"uid":"test-uid","unmask":true}`),
-			expectError: false,
-			mockSetup: func(client *mockKSMClient, confirmer *mockConfirmer) {
-				confirmer.On("Confirm", mock.Anything, "Reveal unmasked secret test-uid?").
-					Return(&ui.ConfirmationResult{Approved: true})
-				client.On("GetSecret", "test-uid", []string(nil), true).Return(map[string]interface{}{
-					"uid":      "test-uid",
-					"title":    "Test Secret",
-					"password": "actual-password",
-				}, nil)
+			validate: func(t *testing.T, result interface{}) {
+				resultMap := result.(map[string]interface{})
+				assert.Equal(t, "test-uid", resultMap["uid"])
 			},
 		},
 		{
-			name:        "get secret unmasked denied",
-			args:        json.RawMessage(`{"uid":"test-uid","unmask":true}`),
-			expectError: true,
+			name:          "get secret unmasked - confirmation path",
+			args:          json.RawMessage(`{"uid":"test-uid","unmask":true}`),
+			serverOptions: &ServerOptions{BatchMode: false, AutoApprove: false},
+			expectError:   false,
 			mockSetup: func(client *mockKSMClient, confirmer *mockConfirmer) {
-				confirmer.On("Confirm", mock.Anything, "Reveal unmasked secret test-uid?").
-					Return(&ui.ConfirmationResult{Approved: false})
+				client.On("GetSecret", "test-uid", []string{}, false).Return(map[string]interface{}{"title": "Test Unmask"}, nil).Once()
+			},
+			validate: func(t *testing.T, result interface{}) {
+				resultMap := result.(map[string]interface{})
+				assert.Equal(t, "confirmation_required", resultMap["status"])
+				assert.Contains(t, resultMap["message"].(string), "Reveal unmasked secret 'Test Unmask' (UID: test-uid)")
+			},
+		},
+		{
+			name:          "get secret unmasked - batch mode",
+			args:          json.RawMessage(`{"uid":"test-uid-batch","unmask":true}`),
+			serverOptions: &ServerOptions{BatchMode: true, AutoApprove: false},
+			expectError:   false,
+			mockSetup: func(client *mockKSMClient, confirmer *mockConfirmer) {
+				client.On("GetSecret", "test-uid-batch", []string(nil), true).Return(map[string]interface{}{"password": "pass"}, nil)
+			},
+			validate: func(t *testing.T, result interface{}) {
+				resultMap := result.(map[string]interface{})
+				assert.Equal(t, "pass", resultMap["password"])
 			},
 		},
 	}
@@ -338,25 +357,32 @@ func TestExecuteGetSecret(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockClient := new(mockKSMClient)
 			mockConfirmer := new(mockConfirmer)
-			logger, _ := audit.NewLogger(audit.Config{
-				FilePath: "/tmp/test-audit.log",
-			})
+			logger, _ := audit.NewLogger(audit.Config{FilePath: "/tmp/test-audit.log"})
 			server := &Server{
 				confirmer: mockConfirmer,
 				logger:    logger,
+				options:   tt.serverOptions,
+			}
+			server.getCurrentClient = server.defaultGetCurrentClientImpl
+			if tt.mockSetup != nil {
+				tt.mockSetup(mockClient, mockConfirmer)
 			}
 
-			tt.mockSetup(mockClient, mockConfirmer)
-
+			if tt.serverOptions.BatchMode || tt.serverOptions.AutoApprove {
+				if tt.name == "get secret unmasked - batch mode" {
+					server.getCurrentClient = func() (KSMClient, error) { return mockClient, nil }
+				}
+			}
 			result, err := server.executeGetSecret(mockClient, tt.args)
-
 			if tt.expectError {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
 				assert.NotNil(t, result)
+				if tt.validate != nil {
+					tt.validate(t, result)
+				}
 			}
-
 			mockClient.AssertExpectations(t)
 			mockConfirmer.AssertExpectations(t)
 		})
@@ -366,69 +392,67 @@ func TestExecuteGetSecret(t *testing.T) {
 // Test UPDATE operation
 func TestExecuteUpdateSecret(t *testing.T) {
 	tests := []struct {
-		name        string
-		args        json.RawMessage
-		expectError bool
-		mockSetup   func(*mockKSMClient, *mockConfirmer)
+		name          string
+		args          json.RawMessage
+		serverOptions *ServerOptions
+		expectError   bool
+		mockSetup     func(*mockKSMClient, *mockConfirmer)
+		validate      func(*testing.T, interface{})
 	}{
 		{
-			name:        "successful update",
-			args:        json.RawMessage(`{"uid":"test-uid","title":"Updated Title","fields":[]}`),
-			expectError: false,
+			name:          "successful update - batch mode",
+			args:          json.RawMessage(`{"uid":"test-uid","title":"Updated Title"}`),
+			serverOptions: &ServerOptions{BatchMode: true},
+			expectError:   false,
 			mockSetup: func(client *mockKSMClient, confirmer *mockConfirmer) {
-				confirmer.On("Confirm", mock.Anything, "Update secret test-uid?").
-					Return(&ui.ConfirmationResult{Approved: true})
 				client.On("UpdateSecret", mock.MatchedBy(func(p types.UpdateSecretParams) bool {
 					return p.UID == "test-uid" && p.Title == "Updated Title"
 				})).Return(nil)
 			},
-		},
-		{
-			name:        "update denied by user",
-			args:        json.RawMessage(`{"uid":"test-uid","title":"Updated Title"}`),
-			expectError: true,
-			mockSetup: func(client *mockKSMClient, confirmer *mockConfirmer) {
-				confirmer.On("Confirm", mock.Anything, "Update secret test-uid?").
-					Return(&ui.ConfirmationResult{Approved: false})
+			validate: func(t *testing.T, result interface{}) {
+				resultMap := result.(map[string]interface{})
+				assert.Equal(t, "test-uid", resultMap["uid"])
+				assert.Equal(t, "Secret updated successfully (confirmed).", resultMap["message"])
 			},
 		},
 		{
-			name:        "KSM update error",
-			args:        json.RawMessage(`{"uid":"test-uid","title":"Updated Title"}`),
-			expectError: true,
-			mockSetup: func(client *mockKSMClient, confirmer *mockConfirmer) {
-				confirmer.On("Confirm", mock.Anything, "Update secret test-uid?").
-					Return(&ui.ConfirmationResult{Approved: true})
-				client.On("UpdateSecret", mock.Anything).Return(errors.New("update failed"))
+			name:          "update - confirmation path",
+			args:          json.RawMessage(`{"uid":"test-uid-conf","title":"Confirm Update"}`),
+			serverOptions: &ServerOptions{BatchMode: false, AutoApprove: false},
+			expectError:   false,
+			mockSetup:     func(client *mockKSMClient, confirmer *mockConfirmer) {},
+			validate: func(t *testing.T, result interface{}) {
+				resultMap := result.(map[string]interface{})
+				assert.Equal(t, "confirmation_required", resultMap["status"])
 			},
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockClient := new(mockKSMClient)
 			mockConfirmer := new(mockConfirmer)
-			logger, _ := audit.NewLogger(audit.Config{
-				FilePath: "/tmp/test-audit.log",
-			})
+			logger, _ := audit.NewLogger(audit.Config{FilePath: "/tmp/test-audit.log"})
 			server := &Server{
 				confirmer: mockConfirmer,
 				logger:    logger,
+				options:   tt.serverOptions,
 			}
-
-			tt.mockSetup(mockClient, mockConfirmer)
-
+			server.getCurrentClient = server.defaultGetCurrentClientImpl
+			if tt.mockSetup != nil {
+				tt.mockSetup(mockClient, mockConfirmer)
+			}
+			if tt.serverOptions.BatchMode || tt.serverOptions.AutoApprove {
+				server.getCurrentClient = func() (KSMClient, error) { return mockClient, nil }
+			}
 			result, err := server.executeUpdateSecret(mockClient, tt.args)
-
 			if tt.expectError {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
-				resultMap := result.(map[string]interface{})
-				assert.Equal(t, "test-uid", resultMap["uid"])
-				assert.Equal(t, "Secret updated successfully", resultMap["message"])
+				if tt.validate != nil {
+					tt.validate(t, result)
+				}
 			}
-
 			mockClient.AssertExpectations(t)
 			mockConfirmer.AssertExpectations(t)
 		})
@@ -438,80 +462,65 @@ func TestExecuteUpdateSecret(t *testing.T) {
 // Test DELETE operation
 func TestExecuteDeleteSecret(t *testing.T) {
 	tests := []struct {
-		name        string
-		args        json.RawMessage
-		expectError bool
-		mockSetup   func(*mockKSMClient, *mockConfirmer)
+		name          string
+		args          json.RawMessage
+		serverOptions *ServerOptions
+		expectError   bool
+		mockSetup     func(*mockKSMClient, *mockConfirmer)
+		validate      func(*testing.T, interface{})
 	}{
 		{
-			name:        "successful delete with double confirmation",
-			args:        json.RawMessage(`{"uid":"test-uid"}`),
-			expectError: false,
+			name:          "successful delete - batch mode",
+			args:          json.RawMessage(`{"uid":"test-uid-del"}`),
+			serverOptions: &ServerOptions{BatchMode: true},
+			expectError:   false,
 			mockSetup: func(client *mockKSMClient, confirmer *mockConfirmer) {
-				confirmer.On("Confirm", mock.Anything, "Delete secret test-uid? This cannot be undone!").
-					Return(&ui.ConfirmationResult{Approved: true})
-				confirmer.On("Confirm", mock.Anything, "Are you absolutely sure? Type 'yes' to confirm deletion.").
-					Return(&ui.ConfirmationResult{Approved: true})
-				client.On("DeleteSecret", "test-uid", true).Return(nil)
+				client.On("DeleteSecret", "test-uid-del", true).Return(nil)
+			},
+			validate: func(t *testing.T, result interface{}) {
+				resultMap := result.(map[string]interface{})
+				assert.Equal(t, "test-uid-del", resultMap["uid"])
+				assert.Equal(t, "Secret deleted successfully (confirmed).", resultMap["message"])
 			},
 		},
 		{
-			name:        "delete denied on first confirmation",
-			args:        json.RawMessage(`{"uid":"test-uid"}`),
-			expectError: true,
-			mockSetup: func(client *mockKSMClient, confirmer *mockConfirmer) {
-				confirmer.On("Confirm", mock.Anything, "Delete secret test-uid? This cannot be undone!").
-					Return(&ui.ConfirmationResult{Approved: false})
-			},
-		},
-		{
-			name:        "delete denied on second confirmation",
-			args:        json.RawMessage(`{"uid":"test-uid"}`),
-			expectError: true,
-			mockSetup: func(client *mockKSMClient, confirmer *mockConfirmer) {
-				confirmer.On("Confirm", mock.Anything, "Delete secret test-uid? This cannot be undone!").
-					Return(&ui.ConfirmationResult{Approved: true})
-				confirmer.On("Confirm", mock.Anything, "Are you absolutely sure? Type 'yes' to confirm deletion.").
-					Return(&ui.ConfirmationResult{Approved: false})
-			},
-		},
-		{
-			name:        "KSM delete error",
-			args:        json.RawMessage(`{"uid":"test-uid"}`),
-			expectError: true,
-			mockSetup: func(client *mockKSMClient, confirmer *mockConfirmer) {
-				confirmer.On("Confirm", mock.Anything, mock.Anything).
-					Return(&ui.ConfirmationResult{Approved: true})
-				client.On("DeleteSecret", "test-uid", true).Return(errors.New("delete failed"))
+			name:          "delete - confirmation path",
+			args:          json.RawMessage(`{"uid":"test-uid-del-conf"}`),
+			serverOptions: &ServerOptions{BatchMode: false, AutoApprove: false},
+			expectError:   false,
+			mockSetup:     func(client *mockKSMClient, confirmer *mockConfirmer) {},
+			validate: func(t *testing.T, result interface{}) {
+				resultMap := result.(map[string]interface{})
+				assert.Equal(t, "confirmation_required", resultMap["status"])
 			},
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockClient := new(mockKSMClient)
 			mockConfirmer := new(mockConfirmer)
-			logger, _ := audit.NewLogger(audit.Config{
-				FilePath: "/tmp/test-audit.log",
-			})
+			logger, _ := audit.NewLogger(audit.Config{FilePath: "/tmp/test-audit.log"})
 			server := &Server{
 				confirmer: mockConfirmer,
 				logger:    logger,
+				options:   tt.serverOptions,
 			}
-
-			tt.mockSetup(mockClient, mockConfirmer)
-
+			server.getCurrentClient = server.defaultGetCurrentClientImpl
+			if tt.mockSetup != nil {
+				tt.mockSetup(mockClient, mockConfirmer)
+			}
+			if tt.serverOptions.BatchMode || tt.serverOptions.AutoApprove {
+				server.getCurrentClient = func() (KSMClient, error) { return mockClient, nil }
+			}
 			result, err := server.executeDeleteSecret(mockClient, tt.args)
-
 			if tt.expectError {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
-				resultMap := result.(map[string]interface{})
-				assert.Equal(t, "test-uid", resultMap["uid"])
-				assert.Equal(t, "Secret deleted successfully", resultMap["message"])
+				if tt.validate != nil {
+					tt.validate(t, result)
+				}
 			}
-
 			mockClient.AssertExpectations(t)
 			mockConfirmer.AssertExpectations(t)
 		})
@@ -590,6 +599,116 @@ func TestExecuteSearchSecrets(t *testing.T) {
 				}
 			}
 
+			mockClient.AssertExpectations(t)
+		})
+	}
+}
+
+// Test ksm_execute_confirmed_action tool
+func TestExecuteKsmExecuteConfirmedAction(t *testing.T) {
+	tests := []struct {
+		name            string
+		args            json.RawMessage
+		expectError     bool
+		mockClientSetup func(*mockKSMClient)
+		validateResult  func(*testing.T, interface{})
+		expectedStatus  string
+		expectedMessage string
+	}{
+		{
+			name: "approve create_secret",
+			args: json.RawMessage(`{
+				"original_tool_name": "create_secret",
+				"original_tool_args_json": "{\"type\":\"login\",\"title\":\"Confirmed Secret\"}",
+				"user_decision": true
+			}`),
+			expectError: false,
+			mockClientSetup: func(client *mockKSMClient) {
+				client.On("CreateSecret", mock.MatchedBy(func(p types.CreateSecretParams) bool {
+					return p.Title == "Confirmed Secret"
+				})).Return("confirmed-uid", nil)
+			},
+			validateResult: func(t *testing.T, result interface{}) {
+				resultMap := result.(map[string]interface{})
+				assert.Equal(t, "confirmed-uid", resultMap["uid"])
+				assert.Contains(t, resultMap["message"].(string), "Secret created successfully (confirmed)")
+			},
+		},
+		{
+			name: "deny create_secret",
+			args: json.RawMessage(`{
+				"original_tool_name": "create_secret",
+				"original_tool_args_json": "{\"type\":\"login\",\"title\":\"Denied Secret\"}",
+				"user_decision": false
+			}`),
+			expectError: false,
+			mockClientSetup: func(client *mockKSMClient) {
+			},
+			validateResult: func(t *testing.T, result interface{}) {
+				resultMap := result.(map[string]interface{})
+				assert.Equal(t, "operation_denied", resultMap["status"])
+				assert.Equal(t, "User denied the operation.", resultMap["message"])
+			},
+		},
+		{
+			name: "approve get_secret unmask",
+			args: json.RawMessage(`{
+				"original_tool_name": "get_secret",
+				"original_tool_args_json": "{\"uid\":\"unmask-this\", \"unmask\":true}",
+				"user_decision": true
+			}`),
+			expectError: false,
+			mockClientSetup: func(client *mockKSMClient) {
+				client.On("GetSecret", "unmask-this", []string(nil), true).Return(map[string]interface{}{"password": "secret_value"}, nil)
+			},
+			validateResult: func(t *testing.T, result interface{}) {
+				resultMap := result.(map[string]interface{})
+				assert.Equal(t, "secret_value", resultMap["password"])
+			},
+		},
+		{
+			name: "unknown original_tool_name",
+			args: json.RawMessage(`{
+				"original_tool_name": "non_existent_tool",
+				"original_tool_args_json": "{}",
+				"user_decision": true
+			}`),
+			expectError: true,
+			mockClientSetup: func(client *mockKSMClient) {
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockClient := new(mockKSMClient)
+			logger, _ := audit.NewLogger(audit.Config{FilePath: "/tmp/test-audit-confirmed.log"})
+			server := &Server{
+				logger:  logger,
+				options: &ServerOptions{},
+			}
+			server.getCurrentClient = func() (KSMClient, error) {
+				return mockClient, nil
+			}
+
+			if tt.mockClientSetup != nil {
+				tt.mockClientSetup(mockClient)
+			}
+
+			result, err := server.executeKsmExecuteConfirmedAction(tt.args)
+
+			if tt.expectError {
+				assert.Error(t, err)
+				if tt.expectedMessage != "" {
+					assert.Contains(t, err.Error(), tt.expectedMessage)
+				}
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, result)
+				if tt.validateResult != nil {
+					tt.validateResult(t, result)
+				}
+			}
 			mockClient.AssertExpectations(t)
 		})
 	}

@@ -316,6 +316,34 @@ func (s *Server) getAvailableTools() []types.MCPTool {
 				"properties": map[string]interface{}{},
 			},
 		},
+		// New tool for handling confirmed actions
+		{
+			Name:        "ksm_execute_confirmed_action",
+			Description: "Executes an action that has been previously confirmed by the user via a prompt.",
+			InputSchema: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"original_tool_name": map[string]interface{}{
+						"type":        "string",
+						"description": "The name of the original tool that required confirmation (e.g., 'create_secret').",
+					},
+					"original_tool_args_json": map[string]interface{}{
+						"type":        "string",
+						"description": "The JSON string of arguments originally passed to the tool.",
+					},
+					"user_decision": map[string]interface{}{
+						"type":        "boolean",
+						"description": "User's decision: true if approved, false if denied.",
+					},
+					"confirmation_context": map[string]interface{}{
+						"type":        "string",
+						"description": "Optional context from the confirmation prompt.",
+						"nullable":    true,
+					},
+				},
+				"required": []string{"original_tool_name", "original_tool_args_json", "user_decision"},
+			},
+		},
 	}
 }
 
@@ -366,8 +394,164 @@ func (s *Server) executeTool(toolName string, args json.RawMessage) (interface{}
 		return s.executeCreateFolder(client, args)
 	case "health_check":
 		return s.handleHealthCheck(context.Background(), args)
+	case "ksm_execute_confirmed_action":
+		return s.executeKsmExecuteConfirmedAction(args)
 
 	default:
 		return nil, fmt.Errorf("unknown tool: %s", toolName)
 	}
+}
+
+// New handler for ksm_execute_confirmed_action
+func (s *Server) executeKsmExecuteConfirmedAction(args json.RawMessage) (interface{}, error) {
+	var params struct {
+		OriginalToolName     string `json:"original_tool_name"`
+		OriginalToolArgsJSON string `json:"original_tool_args_json"`
+		UserDecision         bool   `json:"user_decision"`
+		ConfirmationContext  string `json:"confirmation_context,omitempty"`
+	}
+
+	if err := json.Unmarshal(args, &params); err != nil {
+		return nil, fmt.Errorf("invalid parameters for ksm_execute_confirmed_action: %w", err)
+	}
+
+	s.logger.LogSystem(audit.EventAccess, "ksm_execute_confirmed_action called", map[string]interface{}{
+		"original_tool": params.OriginalToolName,
+		"decision":      params.UserDecision,
+		"profile":       s.currentProfile,
+	})
+
+	if !params.UserDecision {
+		return map[string]interface{}{"status": "operation_denied", "message": "User denied the operation."}, nil
+	}
+
+	// Get current client - this might be redundant if the client is passed around or re-fetched in actual tool handlers
+	client, err := s.getCurrentClient()
+	if err != nil {
+		return nil, fmt.Errorf("no active session for confirmed action: %w", err)
+	}
+
+	// Convert JSON string args back to json.RawMessage for the original tool
+	var originalToolArgs json.RawMessage
+	if params.OriginalToolArgsJSON != "" {
+		originalToolArgs = json.RawMessage(params.OriginalToolArgsJSON)
+	} else {
+		originalToolArgs = json.RawMessage("{}") // Empty JSON object if no args
+	}
+
+	// IMPORTANT: The actual execution logic for each tool needs to be refactored
+	// so it can be called here *without* its own confirmation step.
+	// This is a placeholder for that dispatch logic.
+	switch params.OriginalToolName {
+	case "create_secret":
+		// Call a refactored version: e.g., s.executeCreateSecretInternal(client, originalToolArgs, true /*isConfirmed*/)
+		return s.executeCreateSecretConfirmed(client, originalToolArgs)
+	case "get_secret": // Assuming this is for unmasking
+		// Call a refactored version: e.g., s.executeGetSecretInternal(client, originalToolArgs, true /*isConfirmed*/)
+		return s.executeGetSecretConfirmed(client, originalToolArgs)
+	case "update_secret":
+		return s.executeUpdateSecretConfirmed(client, originalToolArgs)
+	case "delete_secret":
+		return s.executeDeleteSecretConfirmed(client, originalToolArgs)
+	case "upload_file":
+		return s.executeUploadFileConfirmed(client, originalToolArgs)
+	case "create_folder":
+		return s.executeCreateFolderConfirmed(client, originalToolArgs)
+
+	// Add other sensitive tools here
+	default:
+		return nil, fmt.Errorf("cannot execute unhandled confirmed original tool: %s", params.OriginalToolName)
+	}
+}
+
+// Placeholder stubs for "confirmed" versions of tool handlers
+// These would contain the actual logic, minus the confirmation step.
+
+func (s *Server) executeCreateSecretConfirmed(client KSMClient, args json.RawMessage) (interface{}, error) {
+	// Actual implementation of create_secret, assuming confirmation already happened
+	// This is where the existing executeCreateSecret logic (minus confirmation) would go
+	var params types.CreateSecretParams
+	if err := json.Unmarshal(args, &params); err != nil {
+		return nil, fmt.Errorf("invalid parameters for confirmed create_secret: %w", err)
+	}
+	uid, err := client.CreateSecret(params)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]interface{}{"uid": uid, "title": params.Title, "message": "Secret created successfully (confirmed)."}, nil
+}
+
+func (s *Server) executeGetSecretConfirmed(client KSMClient, args json.RawMessage) (interface{}, error) {
+	// Actual implementation of get_secret (unmasking), assuming confirmation
+	var params struct {
+		UID    string   `json:"uid"`
+		Fields []string `json:"fields,omitempty"`
+		Unmask bool     `json:"unmask,omitempty"` // This should be true if we reached here for unmasking
+	}
+	if err := json.Unmarshal(args, &params); err != nil {
+		return nil, fmt.Errorf("invalid parameters for confirmed get_secret: %w", err)
+	}
+	if !params.Unmask { // Safety check, should have been unmask true
+		return nil, fmt.Errorf("confirmed get_secret called but unmask is false")
+	}
+	secret, err := client.GetSecret(params.UID, params.Fields, params.Unmask)
+	if err != nil {
+		return nil, err
+	}
+	return secret, nil
+}
+
+func (s *Server) executeUpdateSecretConfirmed(client KSMClient, args json.RawMessage) (interface{}, error) {
+	var params types.UpdateSecretParams
+	if err := json.Unmarshal(args, &params); err != nil {
+		return nil, fmt.Errorf("invalid parameters for confirmed update_secret: %w", err)
+	}
+	if err := client.UpdateSecret(params); err != nil {
+		return nil, err
+	}
+	return map[string]interface{}{"uid": params.UID, "message": "Secret updated successfully (confirmed)."}, nil
+}
+
+func (s *Server) executeDeleteSecretConfirmed(client KSMClient, args json.RawMessage) (interface{}, error) {
+	var params struct {
+		UID string `json:"uid"`
+	}
+	if err := json.Unmarshal(args, &params); err != nil {
+		return nil, fmt.Errorf("invalid parameters for confirmed delete_secret: %w", err)
+	}
+	// Note: Original delete has double confirmation. This bypasses both.
+	if err := client.DeleteSecret(params.UID, true); err != nil { // Assuming permanent delete
+		return nil, err
+	}
+	return map[string]interface{}{"uid": params.UID, "message": "Secret deleted successfully (confirmed)."}, nil
+}
+
+func (s *Server) executeUploadFileConfirmed(client KSMClient, args json.RawMessage) (interface{}, error) {
+	var params struct {
+		UID      string `json:"uid"`
+		FilePath string `json:"file_path"`
+		Title    string `json:"title"`
+	}
+	if err := json.Unmarshal(args, &params); err != nil {
+		return nil, fmt.Errorf("invalid parameters for confirmed upload_file: %w", err)
+	}
+	if err := client.UploadFile(params.UID, params.FilePath, params.Title); err != nil {
+		return nil, err
+	}
+	return map[string]interface{}{"uid": params.UID, "file": params.Title, "message": "File uploaded successfully (confirmed)."}, nil
+}
+
+func (s *Server) executeCreateFolderConfirmed(client KSMClient, args json.RawMessage) (interface{}, error) {
+	var params struct {
+		Name      string `json:"name"`
+		ParentUID string `json:"parent_uid,omitempty"`
+	}
+	if err := json.Unmarshal(args, &params); err != nil {
+		return nil, fmt.Errorf("invalid parameters for confirmed create_folder: %w", err)
+	}
+	uid, err := client.CreateFolder(params.Name, params.ParentUID)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]interface{}{"uid": uid, "name": params.Name, "message": "Folder created successfully (confirmed)."}, nil
 }

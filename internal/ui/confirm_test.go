@@ -3,12 +3,12 @@ package ui
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/keeper-security/ksm-mcp/pkg/types"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNewConfirmer(t *testing.T) {
@@ -74,64 +74,23 @@ func TestConfirmBatchMode(t *testing.T) {
 	}
 }
 
-func TestConfirmTimeout(t *testing.T) {
-	config := types.Confirmation{
-		BatchMode:   false,
-		AutoApprove: false,
-		Timeout:     100 * time.Millisecond, // Very short timeout
-		DefaultDeny: false,
-	}
-
-	confirmer := NewConfirmer(config)
-	ctx := context.Background()
-
-	start := time.Now()
-	result := confirmer.Confirm(ctx, "Test timeout")
-	elapsed := time.Since(start)
-
-	// Should timeout quickly (but allow some margin for slow CI systems)
-	if elapsed > 2*time.Second {
-		t.Errorf("Confirmation took too long: %v", elapsed)
-	}
-
-	// In CI environment, skip timeout-sensitive tests
-	if os.Getenv("CI") != "" {
-		t.Skip("Skipping timeout test in CI environment")
-	}
-
-	if !result.TimedOut {
-		t.Error("Expected timeout")
-	}
-
-	if result.Approved != true { // Should use default (not deny)
-		t.Error("Expected default approval on timeout")
-	}
-}
-
-func TestConfirmTimeoutWithDefaultDeny(t *testing.T) {
-	// In CI environment, skip timeout-sensitive tests
-	if os.Getenv("CI") != "" {
-		t.Skip("Skipping timeout test in CI environment")
-	}
-
+func TestConfirm_InteractiveModeReturnsError(t *testing.T) {
 	config := types.Confirmation{
 		BatchMode:   false,
 		AutoApprove: false,
 		Timeout:     100 * time.Millisecond,
-		DefaultDeny: true,
+		DefaultDeny: false,
 	}
-
 	confirmer := NewConfirmer(config)
 	ctx := context.Background()
 
-	result := confirmer.Confirm(ctx, "Test timeout with deny")
+	result := confirmer.Confirm(ctx, "Test interactive prompt")
 
-	if !result.TimedOut {
-		t.Error("Expected timeout")
-	}
-
-	if result.Approved != false { // Should use default deny
-		t.Error("Expected default denial on timeout")
+	assert.Error(t, result.Error, "Expected an error in interactive mode due to MCP prompt flow")
+	assert.False(t, result.Approved, "Should not be approved if error occurred")
+	assert.False(t, result.TimedOut, "Should not timeout if error occurs before promptUser")
+	if result.Error != nil {
+		assert.Contains(t, result.Error.Error(), "interactive confirmation via terminal is not supported for this operation", "Error message mismatch")
 	}
 }
 
