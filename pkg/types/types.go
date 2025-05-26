@@ -45,13 +45,14 @@ type GetFieldParams struct {
 
 // GeneratePasswordParams parameters for password generation
 type GeneratePasswordParams struct {
-	Length       int    `json:"length,omitempty"` // Default: 32
+	Length       int    `json:"length,omitempty"`
 	Lowercase    int    `json:"lowercase,omitempty"`
 	Uppercase    int    `json:"uppercase,omitempty"`
 	Digits       int    `json:"digits,omitempty"`
 	Special      int    `json:"special,omitempty"`
 	SpecialSet   string `json:"special_set,omitempty"`
-	SaveToSecret string `json:"save_to_secret,omitempty"` // If specified, saves password to this secret
+	SaveToSecret string `json:"save_to_secret,omitempty"` // Title of the secret to save to
+	FolderUID    string `json:"folder_uid,omitempty"`     // Optional: UID of the folder to save the secret in
 }
 
 // GetTOTPParams parameters for getting TOTP code

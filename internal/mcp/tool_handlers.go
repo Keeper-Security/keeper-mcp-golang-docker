@@ -195,10 +195,17 @@ func (s *Server) executeGeneratePassword(client KSMClient, args json.RawMessage)
 			return nil, err
 		}
 
+		// FolderUID is now mandatory if save_to_secret is used, as per new requirement.
+		if params.FolderUID == "" {
+			return nil, fmt.Errorf("folder_uid is required when using save_to_secret to ensure record is saved to a shared folder")
+		}
+		folderUID := params.FolderUID
+
 		// Create or update the secret with the generated password
 		secretParams := types.CreateSecretParams{
-			Title: params.SaveToSecret,
-			Type:  "login",
+			Title:     params.SaveToSecret,
+			Type:      "login",
+			FolderUID: folderUID,
 			Fields: []types.SecretField{
 				{
 					Type:  "password",

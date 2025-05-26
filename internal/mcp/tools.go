@@ -119,7 +119,11 @@ func (s *Server) getAvailableTools() []types.MCPTool {
 					},
 					"save_to_secret": map[string]interface{}{
 						"type":        "string",
-						"description": "If specified, saves password to a secret with this title (password not exposed to AI)",
+						"description": "If specified, saves password to a new secret with this title (password not exposed to AI).",
+					},
+					"folder_uid": map[string]interface{}{
+						"type":        "string",
+						"description": "UID of the shared folder to save the new secret in. Required if save_to_secret is used.",
 					},
 				},
 			},
