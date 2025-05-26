@@ -653,23 +653,24 @@ func (c *Client) CreateSecret(params types.CreateSecretParams) (string, error) {
 	if params.Title == "" {
 		return "", errors.New("title is required")
 	}
+	if params.FolderUID == "" {
+		// This case should ideally be caught by the MCP handler before calling the client method,
+		// or the handler should determine a default folder UID.
+		// If it reaches here, it means no folder was specified by the caller of this client method.
+		return "", errors.New("folderUID is required to create a secret")
+	}
 
-	// Log creation attempt
 	c.logger.LogSecretOperation(audit.EventSecretCreate, "", "", c.profile, true, map[string]interface{}{
 		"title":  params.Title,
 		"type":   params.Type,
-		"folder": params.FolderUID,
+		"folder": params.FolderUID, // This is the target folder where user wants the secret
 	})
 
-	// Create new record data
+	// Prepare record data
 	recordData := sm.NewRecordCreate(params.Type, params.Title)
-
-	// Set notes
 	if params.Notes != "" {
 		recordData.Notes = params.Notes
 	}
-
-	// Add fields from params
 	var fields []interface{}
 	for _, field := range params.Fields {
 		fields = append(fields, map[string]interface{}{
@@ -679,13 +680,61 @@ func (c *Client) CreateSecret(params types.CreateSecretParams) (string, error) {
 	}
 	recordData.Fields = fields
 
-	// Create the record
-	uid, err := c.sm.CreateSecretWithRecordData("", params.FolderUID, recordData)
+	// Get all folders for context and to determine shared parent for SDK options
+	allKeeperFolders, err := c.sm.GetFolders() // SDK type: []*sm.KeeperFolder
 	if err != nil {
 		c.logger.LogError("ksm", err, map[string]interface{}{
-			"operation": "create_secret",
+			"operation": "CreateSecret_GetFolders",
+			"title":     params.Title,
 		})
-		return "", fmt.Errorf("failed to create secret: %w", err)
+		return "", fmt.Errorf("failed to list folders while preparing to create secret '%s': %w", params.Title, err)
+	}
+
+	// Determine SDK CreateOptions based on the target params.FolderUID
+	sdkCreateOptions := sm.CreateOptions{}
+	foundTargetFolder := false
+
+	for _, kf := range allKeeperFolders {
+		if kf.FolderUid == params.FolderUID {
+			foundTargetFolder = true
+			if kf.ParentUid != "" { // Our target folder has a parent
+				sdkCreateOptions.FolderUid = kf.ParentUid        // The direct parent becomes the main FolderUid for CreateOptions
+				sdkCreateOptions.SubFolderUid = params.FolderUID // Our target is the SubFolderUid
+			} else { // Our target folder is a root folder (no parent UID)
+				sdkCreateOptions.FolderUid = params.FolderUID // Target itself is the main FolderUid
+				sdkCreateOptions.SubFolderUid = ""            // No sub-folder in this context for the SDK call
+			}
+			break
+		}
+	}
+
+	// If targetFolderUID was not found in allKeeperFolders, it implies it might be a shared folder itself that wasn't listed as a sub-folder of anything.
+	// Or it's an invalid FolderUID. The SDK call will ultimately determine validity.
+	if !foundTargetFolder {
+		c.logger.LogSystem(audit.EventAccess, fmt.Sprintf("Target folder %s not found in GetFolders list; assuming it is the main shared folder for SDK CreateOptions or will be handled by SDK.", params.FolderUID), map[string]interface{}{"profile": c.profile, "target_folder_uid": params.FolderUID})
+		sdkCreateOptions.FolderUid = params.FolderUID // Assume user-provided UID is the main shared folder context
+		sdkCreateOptions.SubFolderUid = ""            // If it's the main shared folder, SubFolderUid is empty for the SDK.
+	}
+
+	c.logger.LogSystem(audit.EventAccess, "Attempting CreateSecretWithRecordDataAndOptions", map[string]interface{}{
+		"title":              params.Title,
+		"sdk_folder_uid":     sdkCreateOptions.FolderUid,
+		"sdk_sub_folder_uid": sdkCreateOptions.SubFolderUid,
+		"profile":            c.profile,
+	})
+
+	// Create the record using the more specific SDK call
+	// The SDK expects a pointer to CreateOptions
+	uid, err := c.sm.CreateSecretWithRecordDataAndOptions(&sdkCreateOptions, recordData, allKeeperFolders)
+	if err != nil {
+		c.logger.LogError("ksm", err, map[string]interface{}{
+			"operation":          "CreateSecretWithRecordDataAndOptions",
+			"title":              params.Title,
+			"target_folder_uid":  params.FolderUID, // User's intended folder
+			"sdk_folder_uid":     sdkCreateOptions.FolderUid,
+			"sdk_sub_folder_uid": sdkCreateOptions.SubFolderUid,
+		})
+		return "", fmt.Errorf("failed to create secret '%s' using CreateSecretWithRecordDataAndOptions: %w", params.Title, err)
 	}
 
 	return uid, nil
@@ -741,9 +790,14 @@ func (c *Client) UpdateSecret(params types.UpdateSecretParams) error {
 }
 
 // DeleteSecret deletes a secret
-func (c *Client) DeleteSecret(uid string, confirm bool) error {
-	if !confirm {
-		return errors.New("deletion must be confirmed")
+func (c *Client) DeleteSecret(uid string, permanent bool) error { // KSM SDK permanent is 'force'
+	// Note: The 'permanent' flag is for MCP layer consistency.
+	// The underlying KSM SDK DeleteSecrets call used here does not explicitly take a 'force' boolean
+	// in its most basic documented form. Deletion is generally permanent.
+	if !permanent {
+		c.logger.LogSystem(audit.EventAccess, "DeleteSecret called with permanent=false by handler; KSM SDK delete is typically permanent.", map[string]interface{}{
+			"uid": uid,
+		})
 	}
 
 	// Validate UID
@@ -755,21 +809,36 @@ func (c *Client) DeleteSecret(uid string, confirm bool) error {
 	c.logger.LogSecretOperation(audit.EventSecretDelete, uid, "", c.profile, true, nil)
 
 	// Delete the record
-	statuses, err := c.sm.DeleteSecrets([]string{uid})
+	statuses, err := c.sm.DeleteSecrets([]string{uid}) // Basic call, assuming no direct force flag here or handled by SDK default
 	if err != nil {
 		c.logger.LogError("ksm", err, map[string]interface{}{
 			"operation": "delete_secret",
 			"uid":       uid,
 		})
-		return fmt.Errorf("failed to delete secret: %w", err)
+		return fmt.Errorf("failed to delete secret during SDK call for UID %s: %w", uid, err)
 	}
 
-	// Check if deletion was successful
-	if status, exists := statuses[uid]; exists && status != "success" {
-		return fmt.Errorf("failed to delete secret: %s", status)
+	// Check if deletion was successful for the specific UID
+	status, exists := statuses[uid]
+	if !exists {
+		c.logger.LogSystem(audit.EventAccess, fmt.Sprintf("DeleteSecret status for UID %s not found in SDK response, though SDK call had no error.", uid), map[string]interface{}{
+			"uid": uid, "statuses_map": statuses,
+		})
+		return fmt.Errorf("failed to confirm delete secret status for UID %s (not found in status map: %v)", uid, statuses)
 	}
 
-	return nil
+	// Treat "success" and "ok" as successful deletion statuses.
+	if status != "success" && status != "ok" {
+		c.logger.LogSystem(audit.EventError, fmt.Sprintf("DeleteSecret status for UID %s was '%s', not 'success' or 'ok'.", uid, status), map[string]interface{}{
+			"uid": uid, "status": status,
+		})
+		return fmt.Errorf("failed to delete secret: KSM reported status '%s' for UID %s", status, uid)
+	}
+
+	c.logger.LogSystem(audit.EventAccess, fmt.Sprintf("DeleteSecret successful for UID %s with KSM status '%s'", uid, status), map[string]interface{}{
+		"uid": uid, "status": status,
+	})
+	return nil // Success
 }
 
 // UploadFile uploads a file to a secret

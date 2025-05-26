@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/keeper-security/ksm-mcp/internal/audit"
 	"github.com/keeper-security/ksm-mcp/pkg/types"
@@ -34,8 +35,6 @@ func (s *Server) executeListSecrets(client KSMClient, args json.RawMessage) (int
 			"title":  secret.Title,
 			"type":   secret.Type,
 			"folder": secret.Folder,
-			// TODO: Add created/modified dates when KSM SDK exposes them
-			// The SDK has CreatedDate field but it's not exposed via public methods
 		}
 	}
 
@@ -77,10 +76,8 @@ func (s *Server) executeGetSecret(client KSMClient, args json.RawMessage) (inter
 		}
 	}
 
-	// Confirmation is required for unmasking
-	// Attempt to get secret title for a more descriptive message, ignore error if not found
-	secretTitle := params.UID                                    // Default to UID if title can't be fetched
-	meta, err := client.GetSecret(params.UID, []string{}, false) // Get metadata (title) without unmasking
+	secretTitle := params.UID
+	meta, err := client.GetSecret(params.UID, []string{}, false)
 	if err == nil {
 		if title, ok := meta["title"].(string); ok && title != "" {
 			secretTitle = fmt.Sprintf("'%s' (UID: %s)", title, params.UID)
@@ -128,7 +125,6 @@ func (s *Server) executeSearchSecrets(client KSMClient, args json.RawMessage) (i
 		return nil, err
 	}
 
-	// Enhance output to always include UIDs
 	enhancedResults := make([]map[string]interface{}, len(results))
 	for i, result := range results {
 		enhancedResults[i] = map[string]interface{}{
@@ -156,7 +152,6 @@ func (s *Server) executeGetField(client KSMClient, args json.RawMessage) (interf
 		return nil, fmt.Errorf("invalid parameters: %w", err)
 	}
 
-	// Confirm if unmasking
 	if params.Unmask {
 		ctx := context.Background()
 		result := s.confirmer.Confirm(ctx, fmt.Sprintf("Reveal unmasked field %s?", params.Notation))
@@ -187,21 +182,17 @@ func (s *Server) executeGeneratePassword(client KSMClient, args json.RawMessage)
 		return nil, fmt.Errorf("invalid parameters: %w", err)
 	}
 
-	// Check if save_to_secret is specified
 	if params.SaveToSecret != "" {
-		// Generate password
 		password, err := client.GeneratePassword(params)
 		if err != nil {
 			return nil, err
 		}
 
-		// FolderUID is now mandatory if save_to_secret is used, as per new requirement.
 		if params.FolderUID == "" {
 			return nil, fmt.Errorf("folder_uid is required when using save_to_secret to ensure record is saved to a shared folder")
 		}
 		folderUID := params.FolderUID
 
-		// Create or update the secret with the generated password
 		secretParams := types.CreateSecretParams{
 			Title:     params.SaveToSecret,
 			Type:      "login",
@@ -214,18 +205,14 @@ func (s *Server) executeGeneratePassword(client KSMClient, args json.RawMessage)
 			},
 		}
 
-		// Try to create the secret
 		uid, err := client.CreateSecret(secretParams)
 		if err != nil {
-			// If creation fails, it might already exist - try updating
-			// First, search for the secret
 			results, searchErr := client.SearchSecrets(params.SaveToSecret)
 			if searchErr != nil {
-				return nil, fmt.Errorf("failed to save password: %w", err)
+				return nil, fmt.Errorf("failed to save password (search failed): %w", err)
 			}
 
 			if len(results) > 0 {
-				// Update existing secret
 				updateParams := types.UpdateSecretParams{
 					UID: results[0].UID,
 					Fields: []types.SecretField{
@@ -240,11 +227,10 @@ func (s *Server) executeGeneratePassword(client KSMClient, args json.RawMessage)
 				}
 				uid = results[0].UID
 			} else {
-				return nil, fmt.Errorf("failed to save password: %w", err)
+				return nil, fmt.Errorf("failed to save password (create failed and secret not found to update): %w", err)
 			}
 		}
 
-		// Return confirmation without exposing the password
 		return map[string]interface{}{
 			"message": fmt.Sprintf("Password generated and saved to secret '%s' (UID: %s)", params.SaveToSecret, uid),
 			"uid":     uid,
@@ -252,7 +238,6 @@ func (s *Server) executeGeneratePassword(client KSMClient, args json.RawMessage)
 		}, nil
 	}
 
-	// Standard behavior - return password (with warning this exposes to AI)
 	password, err := client.GeneratePassword(params)
 	if err != nil {
 		return nil, err
@@ -287,27 +272,12 @@ func (s *Server) executeGetTOTPCode(client KSMClient, args json.RawMessage) (int
 
 // executeCreateSecret handles the create_secret tool
 func (s *Server) executeCreateSecret(client KSMClient, args json.RawMessage) (interface{}, error) {
-	// For batch or auto-approve mode, the new ksm_execute_confirmed_action tool will handle it directly.
-	// So, if we are here, it means interactive confirmation *would* have been needed.
-	// We now return a structured response indicating confirmation is required via a prompt.
-
-	// First, parse the arguments to get necessary details for the confirmation message,
-	// like the title. We don't need the full KSMClient here yet.
-	var paramsForDesc types.CreateSecretParams // Use the existing struct for easy parsing of title, etc.
+	var paramsForDesc types.CreateSecretParams
 	if err := json.Unmarshal(args, &paramsForDesc); err != nil {
-		// If basic parsing fails, it's an invalid request anyway.
 		return nil, fmt.Errorf("invalid parameters for create_secret: %w", err)
 	}
 
-	// Check if server is in batch or auto-approve mode via its options
 	if s.options.BatchMode || s.options.AutoApprove {
-		// If in batch or auto-approve, proceed to execute directly.
-		// This reuses the logic now in executeCreateSecretConfirmed.
-		// This path assumes the AI client understands not to expect a prompt workflow
-		// if the server is in batch/auto-approve (though ideally, client checks server capabilities).
-		// Alternatively, even in batch mode, we could return the prompt structure,
-		// and ksm_execute_confirmed_action would respect batch mode from its call.
-		// For simplicity now: direct execution if batch/auto-approve.
 		s.logger.LogSystem(audit.EventAccess, "CreateSecret: Batch/AutoApprove mode, executing directly", map[string]interface{}{
 			"profile": s.currentProfile,
 			"title":   paramsForDesc.Title,
@@ -317,7 +287,6 @@ func (s *Server) executeCreateSecret(client KSMClient, args json.RawMessage) (in
 
 	actionDescription := fmt.Sprintf("Create new KSM secret titled '%s' of type '%s'", paramsForDesc.Title, paramsForDesc.Type)
 	warningMessage := "This will create a new entry in your Keeper vault."
-
 	originalToolArgsJSON := string(args)
 
 	confirmationDetails := map[string]interface{}{
@@ -344,7 +313,7 @@ func (s *Server) executeCreateSecret(client KSMClient, args json.RawMessage) (in
 
 // executeUpdateSecret handles the update_secret tool
 func (s *Server) executeUpdateSecret(client KSMClient, args json.RawMessage) (interface{}, error) {
-	var paramsForDesc types.UpdateSecretParams // Use for parsing UID for messages
+	var paramsForDesc types.UpdateSecretParams
 	if err := json.Unmarshal(args, &paramsForDesc); err != nil {
 		return nil, fmt.Errorf("invalid parameters for update_secret: %w", err)
 	}
@@ -388,7 +357,7 @@ func (s *Server) executeUpdateSecret(client KSMClient, args json.RawMessage) (in
 
 // executeDeleteSecret handles the delete_secret tool
 func (s *Server) executeDeleteSecret(client KSMClient, args json.RawMessage) (interface{}, error) {
-	var paramsForDesc struct { // Use for parsing UID for messages
+	var paramsForDesc struct {
 		UID string `json:"uid"`
 	}
 	if err := json.Unmarshal(args, &paramsForDesc); err != nil {
@@ -431,7 +400,7 @@ func (s *Server) executeDeleteSecret(client KSMClient, args json.RawMessage) (in
 
 // executeUploadFile handles the upload_file tool
 func (s *Server) executeUploadFile(client KSMClient, args json.RawMessage) (interface{}, error) {
-	var paramsForDesc struct { // Use for parsing details for messages
+	var paramsForDesc struct {
 		UID      string `json:"uid"`
 		FilePath string `json:"file_path"`
 		Title    string `json:"title"`
@@ -488,7 +457,6 @@ func (s *Server) executeDownloadFile(client KSMClient, args json.RawMessage) (in
 		return nil, fmt.Errorf("invalid parameters: %w", err)
 	}
 
-	// DownloadFile expects (uid, fileUID, savePath)
 	if err := client.DownloadFile(params.UID, params.FileUID, params.SavePath); err != nil {
 		return nil, err
 	}
@@ -508,7 +476,6 @@ func (s *Server) executeListFolders(client KSMClient, args json.RawMessage) (int
 		return nil, err
 	}
 
-	// Ensure UIDs are prominent in output
 	return map[string]interface{}{
 		"folders": folders.Folders,
 		"count":   len(folders.Folders),
@@ -517,7 +484,7 @@ func (s *Server) executeListFolders(client KSMClient, args json.RawMessage) (int
 
 // executeCreateFolder handles the create_folder tool
 func (s *Server) executeCreateFolder(client KSMClient, args json.RawMessage) (interface{}, error) {
-	var paramsForDesc struct { // Use for parsing details for messages
+	var paramsForDesc struct {
 		Name      string `json:"name"`
 		ParentUID string `json:"parent_uid,omitempty"`
 	}
@@ -560,4 +527,220 @@ func (s *Server) executeCreateFolder(client KSMClient, args json.RawMessage) (in
 		"message":              fmt.Sprintf("Confirmation required to %s. Use the 'ksm_confirm_action' prompt.", actionDescription),
 		"confirmation_details": confirmationDetails,
 	}, nil
+}
+
+// Confirmed action handlers
+func (s *Server) executeCreateSecretConfirmed(client KSMClient, args json.RawMessage) (interface{}, error) {
+	var params types.CreateSecretParams
+	if err := json.Unmarshal(args, &params); err != nil {
+		return nil, fmt.Errorf("invalid parameters for confirmed create_secret: %w", err)
+	}
+	uid, err := client.CreateSecret(params)
+	if err != nil {
+		if strings.Contains(err.Error(), "folder uid=") && strings.Contains(err.Error(), "was not retrieved") {
+			originalErrMessage := err.Error() // Capture original KSM error message part
+
+			if params.FolderUID == "" {
+				// Case 1: No folder_uid was provided in the initial request
+				s.logger.LogSystem(audit.EventAccess, "CreateSecret: No folder_uid provided. Requesting clarification.", map[string]interface{}{
+					"profile": s.currentProfile,
+					"title":   params.Title,
+				})
+				allFolders, listFoldersErr := client.ListFolders()
+				if listFoldersErr != nil {
+					s.logger.LogError("mcp", listFoldersErr, map[string]interface{}{
+						"operation": "executeCreateSecretConfirmed_listFolders_for_clarification",
+						"profile":   s.currentProfile,
+					})
+					// Fallback to a generic error if we can't even list folders
+					return nil, fmt.Errorf("failed to create secret (KSM error: %s). A folder is required. Additionally, failed to retrieve folder list: %w", originalErrMessage, listFoldersErr)
+				}
+
+				var candidateFolders []types.FolderInfo
+				if allFolders != nil {
+					for _, f := range allFolders.Folders {
+						if f.ParentUID == "" {
+							candidateFolders = append(candidateFolders, f)
+						}
+					}
+					if len(candidateFolders) == 0 && len(allFolders.Folders) > 0 {
+						s.logger.LogSystem(audit.EventAccess, "CreateSecret: No top-level folders found, preparing all folders for selection suggestion.", map[string]interface{}{})
+						candidateFolders = allFolders.Folders // Use all folders if no top-level ones specifically
+					}
+				}
+
+				clarificationMessage := fmt.Sprintf("Failed to create secret '%s' (KSM error: %s). No folder was specified.", params.Title, originalErrMessage)
+
+				switch len(candidateFolders) {
+				case 0:
+					clarificationMessage += " No folders are available to create the secret in. Please create a folder first."
+				case 1:
+					f := candidateFolders[0]
+					clarificationMessage += fmt.Sprintf(" The only available folder is '%s' (UID: %s). Would you like to use this folder?", f.Name, f.UID)
+				case 2, 3, 4, 5: // List a few folders directly in the message
+					var folderStrings []string
+					for _, f := range candidateFolders {
+						folderStrings = append(folderStrings, fmt.Sprintf("'%s' (UID: %s)", f.Name, f.UID))
+					}
+					clarificationMessage += fmt.Sprintf(" Please choose from the following folders: %s.", strings.Join(folderStrings, ", "))
+				default: // More than 5 folders
+					clarificationMessage += " Please choose a folder. Refer to the 'available_folders' list for names and UIDs."
+				}
+
+				return map[string]interface{}{
+					"status":                  "folder_required_clarification",
+					"message":                 clarificationMessage,
+					"available_folders":       candidateFolders,
+					"original_tool_args_json": string(args),
+				}, nil
+
+			} else {
+				// Case 2: A specific folder_uid was provided, but it's likely empty (existing logic)
+				s.logger.LogSystem(audit.EventAccess, fmt.Sprintf("CreateSecret: Target folder %s empty or invalid, attempting to find suitable parent.", params.FolderUID), map[string]interface{}{
+					"profile":       s.currentProfile,
+					"title":         params.Title,
+					"target_folder": params.FolderUID,
+				})
+
+				allFolders, listFoldersErr := client.ListFolders()
+				if listFoldersErr != nil {
+					s.logger.LogError("mcp", listFoldersErr, map[string]interface{}{
+						"operation": "executeCreateSecretConfirmed_listFolders_for_parent_check",
+						"profile":   s.currentProfile,
+					})
+					// Fall through to original error if we can't list folders for parent check
+				} else {
+					var currentFolderInfo *types.FolderInfo
+					for _, f := range allFolders.Folders {
+						if f.UID == params.FolderUID {
+							tempF := f
+							currentFolderInfo = &tempF
+							break
+						}
+					}
+
+					if currentFolderInfo != nil && currentFolderInfo.ParentUID != "" {
+						var parentFolderInfo *types.FolderInfo
+						for _, f := range allFolders.Folders {
+							if f.UID == currentFolderInfo.ParentUID {
+								tempF := f
+								parentFolderInfo = &tempF
+								break
+							}
+						}
+
+						if parentFolderInfo != nil {
+							parentSecrets, listSecretsErr := client.ListSecrets(parentFolderInfo.UID)
+							if listSecretsErr != nil {
+								s.logger.LogError("mcp", listSecretsErr, map[string]interface{}{
+									"operation":     "executeCreateSecretConfirmed_listSecrets_parent",
+									"profile":       s.currentProfile,
+									"parent_folder": parentFolderInfo.UID,
+								})
+								// Fall through to original error
+							} else if len(parentSecrets) > 0 {
+								s.logger.LogSystem(audit.EventAccess, fmt.Sprintf("CreateSecret: Recommending parent folder %s for secret %s", parentFolderInfo.UID, params.Title), map[string]interface{}{
+									"profile":                 s.currentProfile,
+									"title":                   params.Title,
+									"original_folder_uid":     params.FolderUID,
+									"recommended_folder_uid":  parentFolderInfo.UID,
+									"recommended_folder_name": parentFolderInfo.Name,
+								})
+								return map[string]interface{}{
+									"status":                  "parent_folder_recommended",
+									"message":                 fmt.Sprintf("The target folder '%s' (UID: %s) is empty or cannot be directly used for new records. It's recommended to use the parent shared folder '%s' (UID: %s) which contains existing records.", currentFolderInfo.Name, params.FolderUID, parentFolderInfo.Name, parentFolderInfo.UID),
+									"original_folder_uid":     params.FolderUID,
+									"original_folder_name":    currentFolderInfo.Name,
+									"recommended_folder_uid":  parentFolderInfo.UID,
+									"recommended_folder_name": parentFolderInfo.Name,
+									"original_tool_args_json": string(args),
+								}, nil
+							} else {
+								s.logger.LogSystem(audit.EventAccess, fmt.Sprintf("CreateSecret: Parent folder %s (for target %s) is also empty or unsuitable.", parentFolderInfo.UID, params.FolderUID), map[string]interface{}{"profile": s.currentProfile})
+							}
+						}
+					}
+				}
+				// Fallback for Case 2: if no suitable parent found or other issue with the specified folder
+				return nil, fmt.Errorf("failed to create secret '%s' in folder '%s' (KSM error: %s). Hint: This can occur if the target shared folder is empty or not properly initialized for API record creation. Please ensure at least one record exists in the folder, or try its parent folder if applicable.", params.Title, params.FolderUID, originalErrMessage)
+			}
+		}
+		// Generic KSM error not related to "folder uid was not retrieved"
+		return nil, fmt.Errorf("failed to create secret '%s': %w", params.Title, err)
+	}
+	// Success
+	return map[string]interface{}{"uid": uid, "title": params.Title, "message": "Secret created successfully (confirmed)."}, nil
+}
+
+func (s *Server) executeGetSecretConfirmed(client KSMClient, args json.RawMessage) (interface{}, error) {
+	var params struct {
+		UID    string   `json:"uid"`
+		Fields []string `json:"fields,omitempty"`
+	}
+	if err := json.Unmarshal(args, &params); err != nil {
+		return nil, fmt.Errorf("invalid parameters for confirmed get_secret: %w", err)
+	}
+	s.logger.LogSystem(audit.EventAccess, "GetSecret (Unmask): Executing confirmed/batched action", map[string]interface{}{
+		"profile": s.currentProfile,
+		"uid":     params.UID,
+	})
+	secret, err := client.GetSecret(params.UID, params.Fields, true) // unmask is explicitly true here
+	if err != nil {
+		return nil, err
+	}
+	return secret, nil
+}
+
+func (s *Server) executeUpdateSecretConfirmed(client KSMClient, args json.RawMessage) (interface{}, error) {
+	var params types.UpdateSecretParams
+	if err := json.Unmarshal(args, &params); err != nil {
+		return nil, fmt.Errorf("invalid parameters for confirmed update_secret: %w", err)
+	}
+	if err := client.UpdateSecret(params); err != nil {
+		return nil, err
+	}
+	return map[string]interface{}{"uid": params.UID, "message": "Secret updated successfully (confirmed)."}, nil
+}
+
+func (s *Server) executeDeleteSecretConfirmed(client KSMClient, args json.RawMessage) (interface{}, error) {
+	var paramsForDesc struct {
+		UID string `json:"uid"`
+	}
+	if err := json.Unmarshal(args, &paramsForDesc); err != nil {
+		return nil, fmt.Errorf("invalid parameters for confirmed delete_secret: %w", err)
+	}
+	if err := client.DeleteSecret(paramsForDesc.UID, true); err != nil {
+		return nil, err
+	}
+	return map[string]interface{}{"uid": paramsForDesc.UID, "message": "Secret deleted successfully (confirmed)."}, nil
+}
+
+func (s *Server) executeUploadFileConfirmed(client KSMClient, args json.RawMessage) (interface{}, error) {
+	var paramsForDesc struct {
+		UID      string `json:"uid"`
+		FilePath string `json:"file_path"`
+		Title    string `json:"title"`
+	}
+	if err := json.Unmarshal(args, &paramsForDesc); err != nil {
+		return nil, fmt.Errorf("invalid parameters for confirmed upload_file: %w", err)
+	}
+	if err := client.UploadFile(paramsForDesc.UID, paramsForDesc.FilePath, paramsForDesc.Title); err != nil {
+		return nil, err
+	}
+	return map[string]interface{}{"uid": paramsForDesc.UID, "file": paramsForDesc.Title, "message": "File uploaded successfully (confirmed)."}, nil
+}
+
+func (s *Server) executeCreateFolderConfirmed(client KSMClient, args json.RawMessage) (interface{}, error) {
+	var paramsForDesc struct {
+		Name      string `json:"name"`
+		ParentUID string `json:"parent_uid,omitempty"`
+	}
+	if err := json.Unmarshal(args, &paramsForDesc); err != nil {
+		return nil, fmt.Errorf("invalid parameters for confirmed create_folder: %w", err)
+	}
+	uid, err := client.CreateFolder(paramsForDesc.Name, paramsForDesc.ParentUID)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]interface{}{"uid": uid, "name": paramsForDesc.Name, "message": "Folder created successfully (confirmed)."}, nil
 }
