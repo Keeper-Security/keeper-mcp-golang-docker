@@ -384,7 +384,7 @@ func (s *Server) executeTool(toolName string, args json.RawMessage) (interface{}
 	}
 
 	// Log tool execution
-	s.logger.LogSystem(audit.EventAccess, "Tool called", map[string]interface{}{
+	s.logSystem(audit.EventAccess, "Tool called", map[string]interface{}{
 		"tool":    toolName,
 		"profile": s.currentProfile,
 	})
@@ -454,7 +454,7 @@ func (s *Server) executeKsmExecuteConfirmedAction(args json.RawMessage) (interfa
 		return nil, fmt.Errorf("invalid parameters for ksm_execute_confirmed_action: %w", err)
 	}
 
-	s.logger.LogSystem(audit.EventAccess, "ksm_execute_confirmed_action called", map[string]interface{}{
+	s.logSystem(audit.EventAccess, "ksm_execute_confirmed_action called", map[string]interface{}{
 		"original_tool": params.OriginalToolName,
 		"decision":      params.UserDecision,
 		"profile":       s.currentProfile,

@@ -58,13 +58,13 @@ func (s *Server) executeGetSecret(client KSMClient, args json.RawMessage) (inter
 
 	if !params.Unmask || s.options.BatchMode || s.options.AutoApprove {
 		if params.Unmask {
-			s.logger.LogSystem(audit.EventAccess, "GetSecret (Unmask): Batch/AutoApprove mode, executing directly", map[string]interface{}{
+			s.logSystem(audit.EventAccess, "GetSecret (Unmask): Batch/AutoApprove mode, executing directly", map[string]interface{}{
 				"profile": s.currentProfile,
 				"uid":     params.UID,
 			})
 			return s.executeGetSecretConfirmed(client, args)
 		} else {
-			s.logger.LogSystem(audit.EventAccess, "GetSecret (Masked): Executing directly", map[string]interface{}{
+			s.logSystem(audit.EventAccess, "GetSecret (Masked): Executing directly", map[string]interface{}{
 				"profile": s.currentProfile,
 				"uid":     params.UID,
 			})
@@ -98,7 +98,7 @@ func (s *Server) executeGetSecret(client KSMClient, args json.RawMessage) (inter
 		},
 	}
 
-	s.logger.LogSystem(audit.EventAccess, "GetSecret (Unmask): Confirmation required", map[string]interface{}{
+	s.logSystem(audit.EventAccess, "GetSecret (Unmask): Confirmation required", map[string]interface{}{
 		"profile": s.currentProfile,
 		"uid":     params.UID,
 	})
@@ -278,7 +278,7 @@ func (s *Server) executeCreateSecret(client KSMClient, args json.RawMessage) (in
 	}
 
 	if s.options.BatchMode || s.options.AutoApprove {
-		s.logger.LogSystem(audit.EventAccess, "CreateSecret: Batch/AutoApprove mode, executing directly", map[string]interface{}{
+		s.logSystem(audit.EventAccess, "CreateSecret: Batch/AutoApprove mode, executing directly", map[string]interface{}{
 			"profile": s.currentProfile,
 			"title":   paramsForDesc.Title,
 		})
@@ -299,7 +299,7 @@ func (s *Server) executeCreateSecret(client KSMClient, args json.RawMessage) (in
 		},
 	}
 
-	s.logger.LogSystem(audit.EventAccess, "CreateSecret: Confirmation required", map[string]interface{}{
+	s.logSystem(audit.EventAccess, "CreateSecret: Confirmation required", map[string]interface{}{
 		"profile": s.currentProfile,
 		"title":   paramsForDesc.Title,
 	})
@@ -319,7 +319,7 @@ func (s *Server) executeUpdateSecret(client KSMClient, args json.RawMessage) (in
 	}
 
 	if s.options.BatchMode || s.options.AutoApprove {
-		s.logger.LogSystem(audit.EventAccess, "UpdateSecret: Batch/AutoApprove mode, executing directly", map[string]interface{}{
+		s.logSystem(audit.EventAccess, "UpdateSecret: Batch/AutoApprove mode, executing directly", map[string]interface{}{
 			"profile": s.currentProfile,
 			"uid":     paramsForDesc.UID,
 		})
@@ -343,7 +343,7 @@ func (s *Server) executeUpdateSecret(client KSMClient, args json.RawMessage) (in
 		},
 	}
 
-	s.logger.LogSystem(audit.EventAccess, "UpdateSecret: Confirmation required", map[string]interface{}{
+	s.logSystem(audit.EventAccess, "UpdateSecret: Confirmation required", map[string]interface{}{
 		"profile": s.currentProfile,
 		"uid":     paramsForDesc.UID,
 	})
@@ -365,7 +365,7 @@ func (s *Server) executeDeleteSecret(client KSMClient, args json.RawMessage) (in
 	}
 
 	if s.options.BatchMode || s.options.AutoApprove {
-		s.logger.LogSystem(audit.EventAccess, "DeleteSecret: Batch/AutoApprove mode, executing directly", map[string]interface{}{
+		s.logSystem(audit.EventAccess, "DeleteSecret: Batch/AutoApprove mode, executing directly", map[string]interface{}{
 			"profile": s.currentProfile,
 			"uid":     paramsForDesc.UID,
 		})
@@ -386,7 +386,7 @@ func (s *Server) executeDeleteSecret(client KSMClient, args json.RawMessage) (in
 		},
 	}
 
-	s.logger.LogSystem(audit.EventAccess, "DeleteSecret: Confirmation required", map[string]interface{}{
+	s.logSystem(audit.EventAccess, "DeleteSecret: Confirmation required", map[string]interface{}{
 		"profile": s.currentProfile,
 		"uid":     paramsForDesc.UID,
 	})
@@ -410,7 +410,7 @@ func (s *Server) executeUploadFile(client KSMClient, args json.RawMessage) (inte
 	}
 
 	if s.options.BatchMode || s.options.AutoApprove {
-		s.logger.LogSystem(audit.EventAccess, "UploadFile: Batch/AutoApprove mode, executing directly", map[string]interface{}{
+		s.logSystem(audit.EventAccess, "UploadFile: Batch/AutoApprove mode, executing directly", map[string]interface{}{
 			"profile": s.currentProfile,
 			"uid":     paramsForDesc.UID,
 			"file":    paramsForDesc.Title,
@@ -432,7 +432,7 @@ func (s *Server) executeUploadFile(client KSMClient, args json.RawMessage) (inte
 		},
 	}
 
-	s.logger.LogSystem(audit.EventAccess, "UploadFile: Confirmation required", map[string]interface{}{
+	s.logSystem(audit.EventAccess, "UploadFile: Confirmation required", map[string]interface{}{
 		"profile":  s.currentProfile,
 		"uid":      paramsForDesc.UID,
 		"filePath": paramsForDesc.FilePath,
@@ -493,7 +493,7 @@ func (s *Server) executeCreateFolder(client KSMClient, args json.RawMessage) (in
 	}
 
 	if s.options.BatchMode || s.options.AutoApprove {
-		s.logger.LogSystem(audit.EventAccess, "CreateFolder: Batch/AutoApprove mode, executing directly", map[string]interface{}{
+		s.logSystem(audit.EventAccess, "CreateFolder: Batch/AutoApprove mode, executing directly", map[string]interface{}{
 			"profile": s.currentProfile,
 			"name":    paramsForDesc.Name,
 		})
@@ -517,7 +517,7 @@ func (s *Server) executeCreateFolder(client KSMClient, args json.RawMessage) (in
 		},
 	}
 
-	s.logger.LogSystem(audit.EventAccess, "CreateFolder: Confirmation required", map[string]interface{}{
+	s.logSystem(audit.EventAccess, "CreateFolder: Confirmation required", map[string]interface{}{
 		"profile": s.currentProfile,
 		"name":    paramsForDesc.Name,
 	})
@@ -550,13 +550,13 @@ func (s *Server) executeCreateSecretConfirmed(client KSMClient, args json.RawMes
 
 			if params.FolderUID == "" {
 				// Case 1: No folder_uid was provided in the initial request
-				s.logger.LogSystem(audit.EventAccess, "CreateSecret: No folder_uid provided. Requesting clarification.", map[string]interface{}{
+				s.logSystem(audit.EventAccess, "CreateSecret: No folder_uid provided. Requesting clarification.", map[string]interface{}{
 					"profile": s.currentProfile,
 					"title":   params.Title,
 				})
 				allFolders, listFoldersErr := client.ListFolders()
 				if listFoldersErr != nil {
-					s.logger.LogError("mcp", listFoldersErr, map[string]interface{}{
+					s.logError("mcp", listFoldersErr, map[string]interface{}{
 						"operation": "executeCreateSecretConfirmed_listFolders_for_clarification",
 						"profile":   s.currentProfile,
 					})
@@ -572,7 +572,7 @@ func (s *Server) executeCreateSecretConfirmed(client KSMClient, args json.RawMes
 						}
 					}
 					if len(candidateFolders) == 0 && len(allFolders.Folders) > 0 {
-						s.logger.LogSystem(audit.EventAccess, "CreateSecret: No top-level folders found, preparing all folders for selection suggestion.", map[string]interface{}{})
+						s.logSystem(audit.EventAccess, "CreateSecret: No top-level folders found, preparing all folders for selection suggestion.", map[string]interface{}{})
 						candidateFolders = allFolders.Folders // Use all folders if no top-level ones specifically
 					}
 				}
@@ -604,7 +604,7 @@ func (s *Server) executeCreateSecretConfirmed(client KSMClient, args json.RawMes
 
 			} else {
 				// Case 2: A specific folder_uid was provided, but it's likely empty (existing logic)
-				s.logger.LogSystem(audit.EventAccess, fmt.Sprintf("CreateSecret: Target folder %s empty or invalid, attempting to find suitable parent.", params.FolderUID), map[string]interface{}{
+				s.logSystem(audit.EventAccess, fmt.Sprintf("CreateSecret: Target folder %s empty or invalid, attempting to find suitable parent.", params.FolderUID), map[string]interface{}{
 					"profile":       s.currentProfile,
 					"title":         params.Title,
 					"target_folder": params.FolderUID,
@@ -612,7 +612,7 @@ func (s *Server) executeCreateSecretConfirmed(client KSMClient, args json.RawMes
 
 				allFolders, listFoldersErr := client.ListFolders()
 				if listFoldersErr != nil {
-					s.logger.LogError("mcp", listFoldersErr, map[string]interface{}{
+					s.logError("mcp", listFoldersErr, map[string]interface{}{
 						"operation": "executeCreateSecretConfirmed_listFolders_for_parent_check",
 						"profile":   s.currentProfile,
 					})
@@ -640,14 +640,14 @@ func (s *Server) executeCreateSecretConfirmed(client KSMClient, args json.RawMes
 						if parentFolderInfo != nil {
 							parentSecrets, listSecretsErr := client.ListSecrets(parentFolderInfo.UID)
 							if listSecretsErr != nil {
-								s.logger.LogError("mcp", listSecretsErr, map[string]interface{}{
+								s.logError("mcp", listSecretsErr, map[string]interface{}{
 									"operation":     "executeCreateSecretConfirmed_listSecrets_parent",
 									"profile":       s.currentProfile,
 									"parent_folder": parentFolderInfo.UID,
 								})
 								// Fall through to original error
 							} else if len(parentSecrets) > 0 {
-								s.logger.LogSystem(audit.EventAccess, fmt.Sprintf("CreateSecret: Recommending parent folder %s for secret %s", parentFolderInfo.UID, params.Title), map[string]interface{}{
+								s.logSystem(audit.EventAccess, fmt.Sprintf("CreateSecret: Recommending parent folder %s for secret %s", parentFolderInfo.UID, params.Title), map[string]interface{}{
 									"profile":                 s.currentProfile,
 									"title":                   params.Title,
 									"original_folder_uid":     params.FolderUID,
@@ -664,7 +664,7 @@ func (s *Server) executeCreateSecretConfirmed(client KSMClient, args json.RawMes
 									"original_tool_args_json": string(args),
 								}, nil
 							} else {
-								s.logger.LogSystem(audit.EventAccess, fmt.Sprintf("CreateSecret: Parent folder %s (for target %s) is also empty or unsuitable.", parentFolderInfo.UID, params.FolderUID), map[string]interface{}{"profile": s.currentProfile})
+								s.logSystem(audit.EventAccess, fmt.Sprintf("CreateSecret: Parent folder %s (for target %s) is also empty or unsuitable.", parentFolderInfo.UID, params.FolderUID), map[string]interface{}{"profile": s.currentProfile})
 							}
 						}
 					}
@@ -688,7 +688,7 @@ func (s *Server) executeGetSecretConfirmed(client KSMClient, args json.RawMessag
 	if err := json.Unmarshal(args, &params); err != nil {
 		return nil, fmt.Errorf("invalid parameters for confirmed get_secret: %w", err)
 	}
-	s.logger.LogSystem(audit.EventAccess, "GetSecret (Unmask): Executing confirmed/batched action", map[string]interface{}{
+	s.logSystem(audit.EventAccess, "GetSecret (Unmask): Executing confirmed/batched action", map[string]interface{}{
 		"profile": s.currentProfile,
 		"uid":     params.UID,
 	})
@@ -753,13 +753,13 @@ func (s *Server) executeCreateFolderConfirmed(client KSMClient, args json.RawMes
 
 	// If ParentUID is not provided, guide the AI to select one.
 	if params.ParentUID == "" {
-		s.logger.LogSystem(audit.EventAccess, "CreateFolder: No parent_uid provided. Requesting clarification.", map[string]interface{}{
+		s.logSystem(audit.EventAccess, "CreateFolder: No parent_uid provided. Requesting clarification.", map[string]interface{}{
 			"profile": s.currentProfile,
 			"name":    params.Name,
 		})
 		allFoldersResponse, listFoldersErr := client.ListFolders()
 		if listFoldersErr != nil {
-			s.logger.LogError("mcp", listFoldersErr, map[string]interface{}{
+			s.logError("mcp", listFoldersErr, map[string]interface{}{
 				"operation": "executeCreateFolderConfirmed_listFolders_for_parent_clarification",
 				"profile":   s.currentProfile,
 			})
@@ -779,7 +779,7 @@ func (s *Server) executeCreateFolderConfirmed(client KSMClient, args json.RawMes
 			if len(suitableParentFolders) == 0 && len(allFoldersResponse.Folders) > 0 {
 				// If no top-level, but other folders exist, offer all as potential parents.
 				// This might guide user to pick an appropriate shared folder even if nested.
-				s.logger.LogSystem(audit.EventAccess, "CreateFolder: No top-level folders found, providing all folders as potential parents for selection.", map[string]interface{}{})
+				s.logSystem(audit.EventAccess, "CreateFolder: No top-level folders found, providing all folders as potential parents for selection.", map[string]interface{}{})
 				suitableParentFolders = allFoldersResponse.Folders
 			}
 		}
@@ -855,7 +855,7 @@ func (s *Server) executeDeleteFolder(client KSMClient, args json.RawMessage) (in
 
 	// Check if auto-approving
 	if s.options.BatchMode || s.options.AutoApprove {
-		s.logger.LogSystem(audit.EventAccess, "DeleteFolder: Batch/AutoApprove mode, executing directly", map[string]interface{}{
+		s.logSystem(audit.EventAccess, "DeleteFolder: Batch/AutoApprove mode, executing directly", map[string]interface{}{
 			"profile":    s.currentProfile,
 			"folder_uid": params.FolderUID,
 			"force":      params.Force,
@@ -873,7 +873,7 @@ func (s *Server) executeDeleteFolder(client KSMClient, args json.RawMessage) (in
 		},
 	}
 
-	s.logger.LogSystem(audit.EventAccess, "DeleteFolder: Confirmation required", map[string]interface{}{
+	s.logSystem(audit.EventAccess, "DeleteFolder: Confirmation required", map[string]interface{}{
 		"profile":    s.currentProfile,
 		"folder_uid": params.FolderUID,
 		"force":      params.Force,

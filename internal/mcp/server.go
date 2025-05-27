@@ -110,7 +110,7 @@ func (s *Server) defaultGetCurrentClientImpl() (KSMClient, error) {
 // Start starts the MCP server
 func (s *Server) Start(ctx context.Context) error {
 	// Log server start
-	s.logger.LogSystem(audit.EventStartup, "MCP server started", map[string]interface{}{
+	s.logSystem(audit.EventStartup, "MCP server started", map[string]interface{}{
 		"session_id": s.sessionID,
 		"batch_mode": s.options.BatchMode,
 		"profile":    s.options.ProfileName,
@@ -119,13 +119,13 @@ func (s *Server) Start(ctx context.Context) error {
 	// Load initial profile if specified
 	if s.options.ProfileName != "" {
 		if err := s.loadProfile(s.options.ProfileName); err != nil {
-			s.logger.LogError("startup", fmt.Errorf("failed to load initial profile '%s': %w", s.options.ProfileName, err), nil)
+			s.logError("startup", fmt.Errorf("failed to load initial profile '%s': %w", s.options.ProfileName, err), nil)
 			return fmt.Errorf("failed to load initial profile '%s': %w", s.options.ProfileName, err)
 		}
 		s.currentProfile = s.options.ProfileName
-		s.logger.LogSystem(audit.EventStartup, "Initial profile loaded", map[string]interface{}{"profile": s.currentProfile})
+		s.logSystem(audit.EventStartup, "Initial profile loaded", map[string]interface{}{"profile": s.currentProfile})
 	} else {
-		s.logger.LogSystem(audit.EventStartup, "No initial profile specified, server will wait for session/create or use direct config if available.", nil)
+		s.logSystem(audit.EventStartup, "No initial profile specified, server will wait for session/create or use direct config if available.", nil)
 	}
 
 	// Start reading from stdin
@@ -137,7 +137,7 @@ func (s *Server) Start(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			s.logger.LogSystem(audit.EventShutdown, "MCP server stopped", map[string]interface{}{
+			s.logSystem(audit.EventShutdown, "MCP server stopped", map[string]interface{}{
 				"session_id": s.sessionID,
 				"duration":   time.Since(s.startTime).String(),
 			})
@@ -154,7 +154,7 @@ func (s *Server) Start(ctx context.Context) error {
 
 			// Process message
 			if err := s.processMessage(line, writer); err != nil {
-				s.logger.LogError("mcp", err, map[string]interface{}{
+				s.logError("mcp", err, map[string]interface{}{
 					"message": string(line),
 				})
 				// Send error response
@@ -179,7 +179,7 @@ func (s *Server) processMessage(data []byte, writer *bufio.Writer) error {
 	}
 
 	// Log request
-	s.logger.LogSystem(audit.EventAccess, "MCP request received", map[string]interface{}{
+	s.logSystem(audit.EventAccess, "MCP request received", map[string]interface{}{
 		"method":     request.Method,
 		"request_id": request.ID,
 	})
@@ -313,6 +313,25 @@ func (s *Server) sendErrorResponse(writer *bufio.Writer, id interface{}, code in
 // generateSessionID generates a unique session ID
 func generateSessionID() string {
 	return fmt.Sprintf("mcp-%d", time.Now().Unix())
+}
+
+// Helper logging methods that handle nil logger checks
+func (s *Server) logSystem(eventType audit.EventType, message string, details map[string]interface{}) {
+	if s.logger != nil {
+		s.logger.LogSystem(eventType, message, details)
+	}
+}
+
+func (s *Server) logError(source string, err error, details map[string]interface{}) {
+	if s.logger != nil {
+		s.logger.LogError(source, err, details)
+	}
+}
+
+func (s *Server) logAccess(resource, action, user string, allowed bool, details map[string]interface{}) {
+	if s.logger != nil {
+		s.logger.LogAccess(resource, action, user, "", allowed, details)
+	}
 }
 
 // handleToolCall processes a tools/call request

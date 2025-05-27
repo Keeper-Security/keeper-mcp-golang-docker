@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/keeper-security/ksm-mcp/internal/audit"
 	"github.com/keeper-security/ksm-mcp/pkg/types"
 )
 
@@ -48,7 +49,7 @@ func (s *Server) handleInitialize(request types.MCPRequest, writer *bufio.Writer
 	}
 
 	// Log client info
-	s.logger.LogSystem("client_connect", "Client connected", map[string]interface{}{
+	s.logSystem(audit.EventAccess, "Client connected", map[string]interface{}{
 		"client_name":    params.ClientInfo.Name,
 		"client_version": params.ClientInfo.Version,
 		"protocol":       params.ProtocolVersion,
@@ -85,7 +86,7 @@ func (s *Server) sendInitializeResponse(writer *bufio.Writer, requestID interfac
 // handleInitialized handles the initialized notification
 func (s *Server) handleInitialized(request types.MCPRequest, writer *bufio.Writer) error {
 	// This is a notification, no response needed
-	s.logger.LogSystem("initialized", "Client initialization complete", nil)
+	s.logSystem(audit.EventAccess, "Client initialization complete", nil)
 	return nil
 }
 
@@ -208,7 +209,7 @@ func (s *Server) handleSessionCreate(request types.MCPRequest, writer *bufio.Wri
 	s.mu.Unlock()
 
 	// Log session change
-	s.logger.LogSystem("session_change", "Profile session activated", map[string]interface{}{
+	s.logSystem(audit.EventAccess, "Profile session activated", map[string]interface{}{
 		"profile": params.ProfileName,
 	})
 
@@ -254,7 +255,7 @@ func (s *Server) handleSessionEnd(request types.MCPRequest, writer *bufio.Writer
 	}
 
 	// Log session end
-	s.logger.LogSystem("session_end", "Profile session ended", map[string]interface{}{
+	s.logSystem(audit.EventAccess, "Profile session ended", map[string]interface{}{
 		"profile": profileToEnd,
 	})
 

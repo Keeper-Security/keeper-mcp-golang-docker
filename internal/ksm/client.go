@@ -126,7 +126,7 @@ func InitializeWithConfig(configData []byte) (map[string]string, error) {
 func (c *Client) ListSecrets(folderUID string) ([]*types.SecretMetadata, error) {
 	// Log access attempt
 	if c.logger != nil {
-		c.logger.LogAccess("secrets", "list", "", c.profile, true, map[string]interface{}{
+		c.logAccess("secrets", "list", "", c.profile, true, map[string]interface{}{
 			"folder": folderUID,
 		})
 	}
@@ -135,7 +135,7 @@ func (c *Client) ListSecrets(folderUID string) ([]*types.SecretMetadata, error) 
 	records, err := c.sm.GetSecrets([]string{})
 	if err != nil {
 		if c.logger != nil {
-			c.logger.LogError("ksm", err, map[string]interface{}{
+			c.logError("ksm", err, map[string]interface{}{
 				"operation": "list_secrets",
 			})
 		}
@@ -169,15 +169,17 @@ func (c *Client) GetSecret(uid string, fields []string, unmask bool) (map[string
 	}
 
 	// Log access attempt
-	c.logger.LogSecretOperation(audit.EventSecretAccess, uid, "", c.profile, true, map[string]interface{}{
-		"fields": fields,
-		"masked": !unmask,
-	})
+	if c.logger != nil {
+		c.logSecretOperation(audit.EventSecretAccess, uid, "", c.profile, true, map[string]interface{}{
+			"fields": fields,
+			"masked": !unmask,
+		})
+	}
 
 	// Get secret
 	records, err := c.sm.GetSecrets([]string{uid})
 	if err != nil {
-		c.logger.LogError("ksm", err, map[string]interface{}{
+		c.logError("ksm", err, map[string]interface{}{
 			"operation": "get_secret",
 			"uid":       uid,
 		})
@@ -272,9 +274,11 @@ func (c *Client) SearchSecrets(query string) ([]*types.SecretMetadata, error) {
 	}
 
 	// Log search
-	c.logger.LogAccess("secrets", "search", "", c.profile, true, map[string]interface{}{
-		"query_length": len(query),
-	})
+	if c.logger != nil {
+		c.logAccess("secrets", "search", "", c.profile, true, map[string]interface{}{
+			"query_length": len(query),
+		})
+	}
 
 	// Get all secrets and filter
 	records, err := c.sm.GetSecrets([]string{})
@@ -363,9 +367,11 @@ func (c *Client) GetField(notation string, unmask bool) (interface{}, error) {
 	}
 
 	// Log access
-	c.logger.LogAccess("field", "get", notation, c.profile, true, map[string]interface{}{
-		"masked": !unmask,
-	})
+	if c.logger != nil {
+		c.logAccess("field", "get", notation, c.profile, true, map[string]interface{}{
+			"masked": !unmask,
+		})
+	}
 
 	// Try to use SDK's notation support first
 	results, err := c.sm.GetNotation(notation)
@@ -376,10 +382,12 @@ func (c *Client) GetField(notation string, unmask bool) (interface{}, error) {
 			return c.getFieldFromDuplicates(parsedNotation, unmask)
 		}
 
-		c.logger.LogError("ksm", err, map[string]interface{}{
-			"operation": "get_field",
-			"notation":  notation,
-		})
+		if c.logger != nil {
+			c.logError("ksm", err, map[string]interface{}{
+				"operation": "get_field",
+				"notation":  notation,
+			})
+		}
 		return nil, fmt.Errorf("failed to get field: %w", err)
 	}
 
@@ -523,7 +531,7 @@ func (c *Client) GeneratePassword(params types.GeneratePasswordParams) (string, 
 	}
 
 	// Log password generation
-	c.logger.LogSystem(audit.EventAccess, "Password generated", map[string]interface{}{
+	c.logSystem(audit.EventAccess, "Password generated", map[string]interface{}{
 		"length": params.Length,
 	})
 
@@ -578,7 +586,7 @@ func (c *Client) GetTOTPCode(uid string) (*types.TOTPResponse, error) {
 	}
 
 	// Log TOTP access
-	c.logger.LogSecretOperation(audit.EventSecretAccess, uid, "", c.profile, true, map[string]interface{}{
+	c.logSecretOperation(audit.EventSecretAccess, uid, "", c.profile, true, map[string]interface{}{
 		"field": "totp",
 	})
 
@@ -660,7 +668,7 @@ func (c *Client) CreateSecret(params types.CreateSecretParams) (string, error) {
 		return "", errors.New("folderUID is required to create a secret")
 	}
 
-	c.logger.LogSecretOperation(audit.EventSecretCreate, "", "", c.profile, true, map[string]interface{}{
+	c.logSecretOperation(audit.EventSecretCreate, "", "", c.profile, true, map[string]interface{}{
 		"title":  params.Title,
 		"type":   params.Type,
 		"folder": params.FolderUID, // This is the target folder where user wants the secret
@@ -683,7 +691,7 @@ func (c *Client) CreateSecret(params types.CreateSecretParams) (string, error) {
 	// Get all folders for context and to determine shared parent for SDK options
 	allKeeperFolders, err := c.sm.GetFolders() // SDK type: []*sm.KeeperFolder
 	if err != nil {
-		c.logger.LogError("ksm", err, map[string]interface{}{
+		c.logError("ksm", err, map[string]interface{}{
 			"operation": "CreateSecret_GetFolders",
 			"title":     params.Title,
 		})
@@ -711,12 +719,12 @@ func (c *Client) CreateSecret(params types.CreateSecretParams) (string, error) {
 	// If targetFolderUID was not found in allKeeperFolders, it implies it might be a shared folder itself that wasn't listed as a sub-folder of anything.
 	// Or it's an invalid FolderUID. The SDK call will ultimately determine validity.
 	if !foundTargetFolder {
-		c.logger.LogSystem(audit.EventAccess, fmt.Sprintf("Target folder %s not found in GetFolders list; assuming it is the main shared folder for SDK CreateOptions or will be handled by SDK.", params.FolderUID), map[string]interface{}{"profile": c.profile, "target_folder_uid": params.FolderUID})
+		c.logSystem(audit.EventAccess, fmt.Sprintf("Target folder %s not found in GetFolders list; assuming it is the main shared folder for SDK CreateOptions or will be handled by SDK.", params.FolderUID), map[string]interface{}{"profile": c.profile, "target_folder_uid": params.FolderUID})
 		sdkCreateOptions.FolderUid = params.FolderUID // Assume user-provided UID is the main shared folder context
 		sdkCreateOptions.SubFolderUid = ""            // If it's the main shared folder, SubFolderUid is empty for the SDK.
 	}
 
-	c.logger.LogSystem(audit.EventAccess, "Attempting CreateSecretWithRecordDataAndOptions", map[string]interface{}{
+	c.logSystem(audit.EventAccess, "Attempting CreateSecretWithRecordDataAndOptions", map[string]interface{}{
 		"title":              params.Title,
 		"sdk_folder_uid":     sdkCreateOptions.FolderUid,
 		"sdk_sub_folder_uid": sdkCreateOptions.SubFolderUid,
@@ -727,7 +735,7 @@ func (c *Client) CreateSecret(params types.CreateSecretParams) (string, error) {
 	// The SDK expects a pointer to CreateOptions
 	uid, err := c.sm.CreateSecretWithRecordDataAndOptions(&sdkCreateOptions, recordData, allKeeperFolders)
 	if err != nil {
-		c.logger.LogError("ksm", err, map[string]interface{}{
+		c.logError("ksm", err, map[string]interface{}{
 			"operation":          "CreateSecretWithRecordDataAndOptions",
 			"title":              params.Title,
 			"target_folder_uid":  params.FolderUID, // User's intended folder
@@ -748,7 +756,7 @@ func (c *Client) UpdateSecret(params types.UpdateSecretParams) error {
 	}
 
 	// Log update attempt
-	c.logger.LogSecretOperation(audit.EventSecretUpdate, params.UID, "", c.profile, true, nil)
+	c.logSecretOperation(audit.EventSecretUpdate, params.UID, "", c.profile, true, nil)
 
 	// Get existing record
 	records, err := c.sm.GetSecrets([]string{params.UID})
@@ -779,7 +787,7 @@ func (c *Client) UpdateSecret(params types.UpdateSecretParams) error {
 
 	// Save the record
 	if err := c.sm.Save(record); err != nil {
-		c.logger.LogError("ksm", err, map[string]interface{}{
+		c.logError("ksm", err, map[string]interface{}{
 			"operation": "update_secret",
 			"uid":       params.UID,
 		})
@@ -795,7 +803,7 @@ func (c *Client) DeleteSecret(uid string, permanent bool) error { // KSM SDK per
 	// The underlying KSM SDK DeleteSecrets call used here does not explicitly take a 'force' boolean
 	// in its most basic documented form. Deletion is generally permanent.
 	if !permanent {
-		c.logger.LogSystem(audit.EventAccess, "DeleteSecret called with permanent=false by handler; KSM SDK delete is typically permanent.", map[string]interface{}{
+		c.logSystem(audit.EventAccess, "DeleteSecret called with permanent=false by handler; KSM SDK delete is typically permanent.", map[string]interface{}{
 			"uid": uid,
 		})
 	}
@@ -806,12 +814,12 @@ func (c *Client) DeleteSecret(uid string, permanent bool) error { // KSM SDK per
 	}
 
 	// Log deletion attempt
-	c.logger.LogSecretOperation(audit.EventSecretDelete, uid, "", c.profile, true, nil)
+	c.logSecretOperation(audit.EventSecretDelete, uid, "", c.profile, true, nil)
 
 	// Delete the record
 	statuses, err := c.sm.DeleteSecrets([]string{uid}) // Basic call, assuming no direct force flag here or handled by SDK default
 	if err != nil {
-		c.logger.LogError("ksm", err, map[string]interface{}{
+		c.logError("ksm", err, map[string]interface{}{
 			"operation": "delete_secret",
 			"uid":       uid,
 		})
@@ -821,7 +829,7 @@ func (c *Client) DeleteSecret(uid string, permanent bool) error { // KSM SDK per
 	// Check if deletion was successful for the specific UID
 	status, exists := statuses[uid]
 	if !exists {
-		c.logger.LogSystem(audit.EventAccess, fmt.Sprintf("DeleteSecret status for UID %s not found in SDK response, though SDK call had no error.", uid), map[string]interface{}{
+		c.logSystem(audit.EventAccess, fmt.Sprintf("DeleteSecret status for UID %s not found in SDK response, though SDK call had no error.", uid), map[string]interface{}{
 			"uid": uid, "statuses_map": statuses,
 		})
 		return fmt.Errorf("failed to confirm delete secret status for UID %s (not found in status map: %v)", uid, statuses)
@@ -829,13 +837,13 @@ func (c *Client) DeleteSecret(uid string, permanent bool) error { // KSM SDK per
 
 	// Treat "success" and "ok" as successful deletion statuses.
 	if status != "success" && status != "ok" {
-		c.logger.LogSystem(audit.EventError, fmt.Sprintf("DeleteSecret status for UID %s was '%s', not 'success' or 'ok'.", uid, status), map[string]interface{}{
+		c.logSystem(audit.EventError, fmt.Sprintf("DeleteSecret status for UID %s was '%s', not 'success' or 'ok'.", uid, status), map[string]interface{}{
 			"uid": uid, "status": status,
 		})
 		return fmt.Errorf("failed to delete secret: KSM reported status '%s' for UID %s", status, uid)
 	}
 
-	c.logger.LogSystem(audit.EventAccess, fmt.Sprintf("DeleteSecret successful for UID %s with KSM status '%s'", uid, status), map[string]interface{}{
+	c.logSystem(audit.EventAccess, fmt.Sprintf("DeleteSecret successful for UID %s with KSM status '%s'", uid, status), map[string]interface{}{
 		"uid": uid, "status": status,
 	})
 	return nil // Success
@@ -852,7 +860,7 @@ func (c *Client) UploadFile(uid, filePath, title string) error {
 	}
 
 	// Log upload attempt
-	c.logger.LogAccess("file", "upload", uid, c.profile, true, map[string]interface{}{
+	c.logAccess("file", "upload", uid, c.profile, true, map[string]interface{}{
 		"file": filePath,
 	})
 
@@ -873,7 +881,7 @@ func (c *Client) UploadFile(uid, filePath, title string) error {
 	// Upload the file
 	fileUID, err := c.sm.UploadFile(record, file)
 	if err != nil {
-		c.logger.LogError("ksm", err, map[string]interface{}{
+		c.logError("ksm", err, map[string]interface{}{
 			"operation": "upload_file",
 			"uid":       uid,
 		})
@@ -893,7 +901,7 @@ func (c *Client) DownloadFile(uid, fileUID, savePath string) error {
 	}
 
 	// Log download attempt
-	c.logger.LogAccess("file", "download", uid, c.profile, true, map[string]interface{}{
+	c.logAccess("file", "download", uid, c.profile, true, map[string]interface{}{
 		"file_uid": fileUID,
 	})
 
@@ -931,7 +939,7 @@ func (c *Client) DownloadFile(uid, fileUID, savePath string) error {
 // ListFolders lists all folders
 func (c *Client) ListFolders() (*types.ListFoldersResponse, error) {
 	// Log access
-	c.logger.LogAccess("folders", "list", "", c.profile, true, nil)
+	c.logAccess("folders", "list", "", c.profile, true, nil)
 
 	// Get folders from SDK
 	folders, err := c.sm.GetFolders()
@@ -956,7 +964,7 @@ func (c *Client) ListFolders() (*types.ListFoldersResponse, error) {
 
 // CreateFolder creates a new folder
 func (c *Client) CreateFolder(name, parentUID string) (string, error) {
-	c.logger.LogAccess("folder", "create", "", c.profile, true, map[string]interface{}{
+	c.logAccess("folder", "create", "", c.profile, true, map[string]interface{}{
 		"name":   name,
 		"parent": parentUID,
 	})
@@ -968,7 +976,7 @@ func (c *Client) CreateFolder(name, parentUID string) (string, error) {
 	}
 
 	if parentUID == "" {
-		c.logger.LogSystem(audit.EventError, "CreateFolder: parentUID is empty. KSM API requires a parent shared folder UID for folder creation.", map[string]interface{}{"name": name, "profile": c.profile})
+		c.logSystem(audit.EventError, "CreateFolder: parentUID is empty. KSM API requires a parent shared folder UID for folder creation.", map[string]interface{}{"name": name, "profile": c.profile})
 		return "", fmt.Errorf("failed to create folder '%s': a parent folder UID (parent_uid) is required by KSM. This usually needs to be a Shared Folder UID", name)
 	}
 
@@ -979,7 +987,7 @@ func (c *Client) CreateFolder(name, parentUID string) (string, error) {
 
 	folderUID, err := c.sm.CreateFolder(options, name, allKeeperFolders) // Pass allKeeperFolders
 	if err != nil {
-		c.logger.LogError("ksm", err, map[string]interface{}{
+		c.logError("ksm", err, map[string]interface{}{
 			"operation":  "create_folder",
 			"name":       name,
 			"parent_uid": parentUID,
@@ -1000,25 +1008,25 @@ func (c *Client) CreateFolder(name, parentUID string) (string, error) {
 				if kf.Name == name && kf.ParentUid == parentUID {
 					folderUID = kf.FolderUid // Found it, use its UID.
 					foundExistingByName = true
-					c.logger.LogSystem(audit.EventAccess, fmt.Sprintf("CreateFolder: KSM SDK returned empty UID for folder '%s', but found existing/newly created folder by name with UID %s.", name, folderUID), map[string]interface{}{})
+					c.logSystem(audit.EventAccess, fmt.Sprintf("CreateFolder: KSM SDK returned empty UID for folder '%s', but found existing/newly created folder by name with UID %s.", name, folderUID), map[string]interface{}{})
 					break
 				}
 			}
 		}
 
 		if !foundExistingByName {
-			c.logger.LogSystem(audit.EventError, "CreateFolder: KSM SDK returned empty folderUID without an error, and folder was not found by name.", map[string]interface{}{"name": name, "parent_uid": parentUID, "profile": c.profile})
+			c.logSystem(audit.EventError, "CreateFolder: KSM SDK returned empty folderUID without an error, and folder was not found by name.", map[string]interface{}{"name": name, "parent_uid": parentUID, "profile": c.profile})
 			return "", fmt.Errorf("KSM SDK returned an empty UID for new folder '%s' and it could not be subsequently found by name", name)
 		}
 	}
 
-	c.logger.LogSystem(audit.EventAccess, fmt.Sprintf("Folder '%s' (UID: %s) (operation successful or folder already existed) under parent %s", name, folderUID, parentUID), map[string]interface{}{"profile": c.profile})
+	c.logSystem(audit.EventAccess, fmt.Sprintf("Folder '%s' (UID: %s) (operation successful or folder already existed) under parent %s", name, folderUID, parentUID), map[string]interface{}{"profile": c.profile})
 	return folderUID, nil
 }
 
 // DeleteFolder deletes a folder by UID, optionally forcing if non-empty.
 func (c *Client) DeleteFolder(uid string, force bool) error {
-	c.logger.LogAccess("folder", "delete", uid, c.profile, true, map[string]interface{}{
+	c.logAccess("folder", "delete", uid, c.profile, true, map[string]interface{}{
 		"force": force,
 	})
 
@@ -1028,7 +1036,7 @@ func (c *Client) DeleteFolder(uid string, force bool) error {
 
 	statuses, err := c.sm.DeleteFolder([]string{uid}, force)
 	if err != nil {
-		c.logger.LogError("ksm", err, map[string]interface{}{
+		c.logError("ksm", err, map[string]interface{}{
 			"operation":  "delete_folder_sdk_call",
 			"folder_uid": uid,
 			"force":      force,
@@ -1040,7 +1048,7 @@ func (c *Client) DeleteFolder(uid string, force bool) error {
 	// Check status for the specific UID
 	status, exists := statuses[uid]
 	if !exists {
-		c.logger.LogSystem(audit.EventError, fmt.Sprintf("DeleteFolder status for UID %s not found in SDK response.", uid), map[string]interface{}{
+		c.logSystem(audit.EventError, fmt.Sprintf("DeleteFolder status for UID %s not found in SDK response.", uid), map[string]interface{}{
 			"folder_uid":   uid,
 			"force":        force,
 			"statuses_map": statuses,
@@ -1051,7 +1059,7 @@ func (c *Client) DeleteFolder(uid string, force bool) error {
 
 	// Based on DeleteSecret, "success" or "ok" should be fine. SDK might also return empty status on success.
 	if status != "success" && status != "ok" && status != "" {
-		c.logger.LogSystem(audit.EventError, fmt.Sprintf("DeleteFolder status for UID %s was '%s'.", uid, status), map[string]interface{}{
+		c.logSystem(audit.EventError, fmt.Sprintf("DeleteFolder status for UID %s was '%s'.", uid, status), map[string]interface{}{
 			"folder_uid": uid,
 			"force":      force,
 			"status":     status,
@@ -1060,7 +1068,7 @@ func (c *Client) DeleteFolder(uid string, force bool) error {
 		return fmt.Errorf("failed to delete folder '%s': KSM reported status '%s'", uid, status)
 	}
 
-	c.logger.LogSystem(audit.EventAccess, fmt.Sprintf("Folder '%s' deleted successfully with status '%s'.", uid, status), map[string]interface{}{
+	c.logSystem(audit.EventAccess, fmt.Sprintf("Folder '%s' deleted successfully with status '%s'.", uid, status), map[string]interface{}{
 		"folder_uid": uid,
 		"status":     status,
 		"profile":    c.profile,
@@ -1104,4 +1112,29 @@ func isSensitiveField(field string) bool {
 		}
 	}
 	return false
+}
+
+// Helper logging methods that handle nil logger checks
+func (c *Client) logAccess(resource, action, notation, profile string, allowed bool, details map[string]interface{}) {
+	if c.logger != nil {
+		c.logger.LogAccess(resource, action, notation, profile, allowed, details)
+	}
+}
+
+func (c *Client) logSecretOperation(operation audit.EventType, uid, user, profile string, success bool, details map[string]interface{}) {
+	if c.logger != nil {
+		c.logger.LogSecretOperation(operation, uid, user, profile, success, details)
+	}
+}
+
+func (c *Client) logError(source string, err error, details map[string]interface{}) {
+	if c.logger != nil {
+		c.logger.LogError(source, err, details)
+	}
+}
+
+func (c *Client) logSystem(eventType audit.EventType, message string, details map[string]interface{}) {
+	if c.logger != nil {
+		c.logger.LogSystem(eventType, message, details)
+	}
 }

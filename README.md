@@ -98,7 +98,6 @@ The KSM MCP server provides the following tools to interact with Keeper Secrets 
 *   `get_server_version`: Get the current version of the KSM MCP server.
 *   `health_check`: Check the operational status of the MCP server and its connection to KSM.
 
-*(Note: Some tools like `get_field` or specific KSM notation queries might also be available but are considered more advanced.)*
 
 ## Sample Use Cases
 
@@ -119,4 +118,245 @@ Here are some examples of how you might instruct an AI agent (like Claude) to us
 *   **Generate a secure password and save it to a new record:**
     *"Generate a very strong 32-character password with uppercase, lowercase, numbers, and special characters. Save it directly to a new login record titled 'Internal Audit Service Account' in the 'Service Accounts' folder. Do not show me the password."*
 
---- 
+---
+
+## Server Configuration Reference
+
+The KSM MCP server can be instantiated in multiple ways with various configuration options. This section documents all available methods, flags, and environment variables.
+
+### Configuration Methods
+
+#### Method 1: Docker with Environment Variables (Recommended)
+
+```json
+{
+  "mcpServers": {
+    "ksm": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm",
+        "-e", "KSM_CONFIG_BASE64=YOUR_BASE64_CONFIG_STRING",
+        "keepersecurityinc/ksm-mcp-poc:latest"
+      ]
+    }
+  }
+}
+```
+
+#### Method 2: Pre-compiled Binary with Profile
+
+```json
+{
+  "mcpServers": {
+    "ksm": {
+      "command": "/path/to/ksm-mcp",
+      "args": ["serve", "--profile", "default"]
+    }
+  }
+}
+```
+
+#### Method 3: Pre-compiled Binary with Base64 Config (CLI Flag)
+
+```json
+{
+  "mcpServers": {
+    "ksm": {
+      "command": "/path/to/ksm-mcp",
+      "args": [
+        "serve",
+        "--config-base64", "YOUR_BASE64_CONFIG_STRING"
+      ]
+    }
+  }
+}
+```
+
+#### Method 4: Pre-compiled Binary with Environment Variables
+
+```json
+{
+  "mcpServers": {
+    "ksm": {
+      "command": "/path/to/ksm-mcp",
+      "args": ["serve"],
+      "env": {
+        "KSM_CONFIG_BASE64": "YOUR_BASE64_CONFIG_STRING"
+      }
+    }
+  }
+}
+```
+
+#### Method 5: Silent Mode (No Local Logs)
+
+```json
+{
+  "mcpServers": {
+    "ksm": {
+      "command": "/path/to/ksm-mcp",
+      "args": [
+        "serve",
+        "--no-logs",
+        "--config-base64", "YOUR_BASE64_CONFIG_STRING"
+      ]
+    }
+  }
+}
+```
+
+### Command Line Flags
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--profile` | string | `""` | Profile name to use from local storage |
+| `--config-base64` | string | `""` | Base64-encoded KSM configuration string |
+| `--batch` | boolean | `false` | Run in batch mode (no password prompts, suitable for automated environments) |
+| `--auto-approve` | boolean | `false` | Auto-approve all destructive operations without user confirmation (dangerous) |
+| `--timeout` | duration | `30s` | Request timeout duration |
+| `--log-level` | string | `info` | Log level (debug, info, warn, error) |
+| `--no-logs` | boolean | `false` | Disable audit logging (no local files created) |
+
+#### Flag Details
+
+**`--batch` (Non-Interactive Mode)**
+- **Purpose**: Prevents the server from prompting for passwords or user input
+- **When to use**: 
+  - Automated environments (CI/CD, Docker containers)
+  - When running as a service where no human interaction is possible
+  - Claude Desktop integration (recommended)
+- **What it does**: 
+  - Skips password prompts when loading encrypted profiles
+  - Uses environment variables or CLI flags for all configuration
+  - Fails gracefully if required input is missing instead of hanging
+
+**`--auto-approve` (Dangerous)**
+- **Purpose**: Bypasses user confirmation prompts for destructive operations
+- **⚠️ Security Warning**: This is dangerous and should only be used in controlled environments
+- **What operations normally require confirmation**:
+  - `create_secret` - Creating new secrets
+  - `update_secret` - Modifying existing secrets  
+  - `delete_secret` - Deleting secrets
+  - `create_folder` - Creating new folders
+  - `delete_folder` - Deleting folders
+  - `upload_file` - Uploading files to secrets
+  - Unmasking sensitive data (passwords, API keys, etc.)
+- **When you might use it**:
+  - Automated testing environments
+  - Trusted AI agents in controlled scenarios
+  - Bulk operations where manual confirmation isn't practical
+- **Recommended alternative**: Use the `ksm_execute_confirmed_action` tool for selective approval
+
+### Environment Variables
+
+| Variable | Type | Default | Description |
+|----------|------|---------|-------------|
+| `KSM_CONFIG_BASE64` | string | `""` | Base64-encoded KSM configuration string |
+| `KSM_MCP_CONFIG_DIR` | string | `~/.keeper/ksm-mcp` | Directory for profiles and logs |
+| `KSM_MCP_PROFILE` | string | `""` | Default profile name to use |
+
+### Configuration Priority
+
+The server uses the following priority order for configuration:
+
+1. **CLI Flag `--config-base64`** (highest priority)
+2. **Environment Variable `KSM_CONFIG_BASE64`**
+3. **CLI Flag `--profile`** with local profile storage
+4. **Environment Variable `KSM_MCP_PROFILE`** with local profile storage
+
+### Profile Management Commands
+
+#### Why Use Profiles?
+
+Profiles provide a secure way to store and manage KSM configurations locally without exposing sensitive credentials:
+
+- **Security**: Your base64 config contains sensitive KSM application credentials. Profiles encrypt and store these locally with password protection
+- **Convenience**: Once initialized, you only need to reference the profile name instead of passing the full base64 config each time
+- **Multiple Environments**: Manage different KSM applications (dev, staging, prod) with separate profiles
+- **Credential Protection**: Keeps sensitive data out of command lines, environment variables, and configuration files
+- **Persistent Storage**: Survives system restarts and doesn't require re-entering credentials
+
+**When to use profiles vs. direct config:**
+- **Use profiles for**: Local development, persistent setups, multiple environments
+- **Use direct config for**: CI/CD, Docker containers, temporary usage, environments where local storage isn't desired
+
+#### Initialize a New Profile
+
+```bash
+ksm-mcp init --profile PROFILE_NAME --config "BASE64_CONFIG_STRING"
+```
+
+This command:
+1. Takes your base64 KSM configuration
+2. Encrypts it with a password you provide
+3. Stores it locally in `~/.keeper/ksm-mcp/profiles/`
+4. Allows future use with just `--profile PROFILE_NAME`
+
+#### List Available Profiles
+
+```bash
+ksm-mcp profiles list
+```
+
+#### Delete a Profile
+
+```bash
+ksm-mcp profiles delete --profile PROFILE_NAME
+```
+
+### Security Considerations
+
+| Method | Security Level | Use Case |
+|--------|---------------|----------|
+| Docker with env vars | **High** | Production, CI/CD |
+| Binary with profile | **High** | Local development, persistent setup |
+| Binary with CLI flag | **Medium** | Testing, temporary usage |
+| Binary with env vars | **High** | Production, containerized environments |
+| Silent mode | **High** | Compliance, no local artifacts |
+
+### Troubleshooting
+
+#### Common Issues
+
+1. **"No active session" error**: Ensure you have either:
+   - A valid `--profile` flag pointing to an initialized profile
+   - A valid `--config-base64` flag or `KSM_CONFIG_BASE64` environment variable
+
+2. **"Failed to create log directory" warnings**: Use `--no-logs` flag to disable local logging
+
+3. **Permission denied errors**: Ensure the binary has execute permissions and the config directory is writable
+
+#### Debug Mode
+
+Enable debug logging for troubleshooting:
+
+```bash
+ksm-mcp serve --log-level debug --profile your-profile
+```
+
+### Examples
+
+#### Development Setup
+
+```bash
+# Initialize profile
+ksm-mcp init --profile dev --config "ewogICJob3N0bmFtZSI6..."
+
+# Run server
+ksm-mcp serve --profile dev --log-level debug
+```
+
+#### Production Setup (Docker)
+
+```bash
+docker run -i --rm \
+  -e KSM_CONFIG_BASE64="ewogICJob3N0bmFtZSI6..." \
+  keepersecurityinc/ksm-mcp-poc:latest
+```
+
+#### CI/CD Setup (No Local Files)
+
+```bash
+export KSM_CONFIG_BASE64="ewogICJob3N0bmFtZSI6..."
+ksm-mcp serve --no-logs --batch --timeout 60s
+``` 
