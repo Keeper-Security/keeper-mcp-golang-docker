@@ -36,7 +36,7 @@ KSM MCP is a Model Context Protocol (MCP) server that acts as a secure intermedi
     ```
 
 3.  **Restart Claude Desktop:**
-    *   The KSM server should now be available to Claude. The first time it connects, it will use the base64 config to initialize a local profile (e.g., "docker_profile") within the Docker volume.
+    *   The KSM server should now be available to Claude. The first time it connects, it will use the base64 config to start up.
 
 ### Option 2: Using a Pre-compiled Binary
 
