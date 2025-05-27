@@ -1,0 +1,40 @@
+feat: Add validation for single-value fields and improve field type guidance
+
+BREAKING CHANGE: The MCP server now enforces single values for simple fields and will automatically trim multiple values to the first one.
+
+## Problem
+1. Claude was creating records with multiple values in simple fields (e.g., multiple passwords, emails)
+2. Claude was using incorrect field structures for complex types (e.g., bankRoutingNumber instead of bankAccount.routingNumber)
+
+## Solution
+1. **Enhanced Tool Descriptions**: Updated create_secret and update_secret tool descriptions to:
+   - Clarify which fields need single values vs complex structures
+   - Include inline examples of ALL complex field structures directly in the tool descriptions
+   - Show correct property names for bankAccount, paymentCard, address, phone, etc.
+
+2. **Added Smart Validation**: Implemented validation that:
+   - Only enforces single values for simple fields (password, login, email, etc.)
+   - Excludes complex fields that require structured data (bankAccount, securityQuestion, address, etc.)
+   - Automatically trims multiple values to first value for simple fields only
+   - Adds warnings when multiple values are detected and corrected
+
+3. **Improved Field Structure Examples**: Tool descriptions now include:
+   - bankAccount: [{accountType:'checking', routingNumber:'123', accountNumber:'456'}]
+   - securityQuestion: [{question:'Q?', answer:'A'}]
+   - address: [{street1:'', city:'', state:'', zip:''}]
+   - phone: [{region:'US', number:'555-1234'}]
+   - And all other complex field structures
+
+## Fixed Fields
+The validation now correctly handles these complex field types:
+- bankAccount (with accountType, routingNumber, accountNumber)
+- paymentCard (with cardNumber, cardExpirationDate, cardSecurityCode)
+- address (with street1, street2, city, state, country, zip)
+- phone (with region, number, ext, type)
+- name (with first, middle, last)
+- securityQuestion (with question, answer)
+- keyPair (with publicKey, privateKey)
+- host (with hostName, port)
+- And other complex PAM-related fields
+
+This ensures AI models create properly structured records that match KSM SDK expectations. 

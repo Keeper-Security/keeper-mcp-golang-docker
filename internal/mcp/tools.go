@@ -145,7 +145,7 @@ func (s *Server) getAvailableTools() []types.MCPTool {
 		// Phase 2 Tools
 		{
 			Name:        "create_secret",
-			Description: "Create a new secret (requires confirmation)",
+			Description: "Create a new secret (requires confirmation). IMPORTANT: Simple fields (password, login, email) use single values. Complex fields require specific structures - bankAccount: [{accountType:'checking', routingNumber:'123', accountNumber:'456'}], securityQuestion: [{question:'Q?', answer:'A'}], address: [{street1:'', city:'', state:'', zip:''}], phone: [{region:'US', number:'555-1234'}]",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
@@ -163,7 +163,7 @@ func (s *Server) getAvailableTools() []types.MCPTool {
 					},
 					"fields": map[string]interface{}{
 						"type":        "array",
-						"description": "Field values array",
+						"description": "Field values array. IMPORTANT: Use only ONE value per field for standard fields (password, login, email, etc.)",
 						"items": map[string]interface{}{
 							"type": "object",
 							"properties": map[string]interface{}{
@@ -173,7 +173,7 @@ func (s *Server) getAvailableTools() []types.MCPTool {
 								},
 								"value": map[string]interface{}{
 									"type":        "array",
-									"description": "Field value(s)",
+									"description": "Field values - Simple fields: ['value'], Complex fields: bankAccount:[{accountType,routingNumber,accountNumber}], paymentCard:[{cardNumber,cardExpirationDate,cardSecurityCode}], address:[{street1,street2,city,state,country,zip}], phone:[{region,number,ext,type}], name:[{first,middle,last}], securityQuestion:[{question,answer}], keyPair:[{publicKey,privateKey}], host:[{hostName,port}]",
 									"items":       map[string]interface{}{"type": "string"},
 								},
 							},
@@ -190,7 +190,7 @@ func (s *Server) getAvailableTools() []types.MCPTool {
 		},
 		{
 			Name:        "update_secret",
-			Description: "Update an existing secret (requires confirmation)",
+			Description: "Update an existing secret (requires confirmation). IMPORTANT: Simple fields (password, login, email) use single values. Complex fields require specific structures - bankAccount: [{accountType:'checking', routingNumber:'123', accountNumber:'456'}], securityQuestion: [{question:'Q?', answer:'A'}], address: [{street1:'', city:'', state:'', zip:''}], phone: [{region:'US', number:'555-1234'}]",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
@@ -204,7 +204,7 @@ func (s *Server) getAvailableTools() []types.MCPTool {
 					},
 					"fields": map[string]interface{}{
 						"type":        "array",
-						"description": "Field values to update",
+						"description": "Field values to update. IMPORTANT: Use only ONE value per field for standard fields (password, login, email, etc.)",
 						"items": map[string]interface{}{
 							"type": "object",
 							"properties": map[string]interface{}{
@@ -214,7 +214,7 @@ func (s *Server) getAvailableTools() []types.MCPTool {
 								},
 								"value": map[string]interface{}{
 									"type":        "array",
-									"description": "Field value(s)",
+									"description": "Field values - Simple fields: ['value'], Complex fields: bankAccount:[{accountType,routingNumber,accountNumber}], paymentCard:[{cardNumber,cardExpirationDate,cardSecurityCode}], address:[{street1,street2,city,state,country,zip}], phone:[{region,number,ext,type}], name:[{first,middle,last}], securityQuestion:[{question,answer}], keyPair:[{publicKey,privateKey}], host:[{hostName,port}]",
 									"items":       map[string]interface{}{"type": "string"},
 								},
 							},

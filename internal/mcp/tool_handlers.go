@@ -617,6 +617,52 @@ func (s *Server) executeCreateSecretConfirmed(client KSMClient, args json.RawMes
 	if err := json.Unmarshal(args, &params); err != nil {
 		return nil, fmt.Errorf("invalid parameters for confirmed create_secret: %w", err)
 	}
+
+	// Validate and warn about multiple values in standard fields
+	standardFields := map[string]bool{
+		"password":      true,
+		"login":         true,
+		"email":         true,
+		"oneTimeCode":   true,
+		"licenseNumber": true,
+		"accountNumber": true,
+		"pinCode":       true,
+		"securityCode":  true,
+		"cardNumber":    true,
+		"routingNumber": true,
+	}
+
+	// Fields that require complex structures (arrays with maps) should be excluded
+	complexFields := map[string]bool{
+		"securityQuestion": true, // Requires [{question: "", answer: ""}]
+		"paymentCard":      true, // Requires complex structure
+		"address":          true, // Requires complex structure
+		"phone":            true, // Requires complex structure
+		"bankAccount":      true, // Requires complex structure
+		"keyPair":          true, // Requires complex structure
+		"host":             true, // Can be complex
+		"name":             true, // Can be complex
+		"pamHostname":      true, // Complex structure
+		"pamResources":     true, // Complex structure
+		"script":           true, // Complex structure
+		"passkey":          true, // Complex structure
+	}
+
+	var warnings []string
+	for i := range params.Fields {
+		field := &params.Fields[i]
+		// Skip complex fields that need structured data
+		if complexFields[field.Type] {
+			continue
+		}
+
+		if standardFields[field.Type] && len(field.Value) > 1 {
+			warnings = append(warnings, fmt.Sprintf("Field '%s' has %d values but standard practice is to use only one value", field.Type, len(field.Value)))
+			// Keep only the first value for standard fields
+			field.Value = field.Value[:1]
+		}
+	}
+
 	uid, err := client.CreateSecret(params)
 	if err != nil {
 		if strings.Contains(err.Error(), "folder uid=") && strings.Contains(err.Error(), "was not retrieved") {
@@ -751,7 +797,19 @@ func (s *Server) executeCreateSecretConfirmed(client KSMClient, args json.RawMes
 		return nil, fmt.Errorf("failed to create secret '%s': %w", params.Title, err)
 	}
 	// Success
-	return map[string]interface{}{"uid": uid, "title": params.Title, "message": "Secret created successfully (confirmed)."}, nil
+	response := map[string]interface{}{
+		"uid":     uid,
+		"title":   params.Title,
+		"message": "Secret created successfully (confirmed).",
+	}
+
+	// Add warnings if any
+	if len(warnings) > 0 {
+		response["warnings"] = warnings
+		response["message"] = "Secret created successfully (confirmed). Note: Multiple values were provided for standard fields but only the first value was used."
+	}
+
+	return response, nil
 }
 
 func (s *Server) executeGetSecretConfirmed(client KSMClient, args json.RawMessage) (interface{}, error) {
@@ -826,10 +884,68 @@ func (s *Server) executeUpdateSecretConfirmed(client KSMClient, args json.RawMes
 	if err := json.Unmarshal(args, &params); err != nil {
 		return nil, fmt.Errorf("invalid parameters for confirmed update_secret: %w", err)
 	}
+
+	// Validate and warn about multiple values in standard fields
+	standardFields := map[string]bool{
+		"password":      true,
+		"login":         true,
+		"email":         true,
+		"oneTimeCode":   true,
+		"licenseNumber": true,
+		"accountNumber": true,
+		"pinCode":       true,
+		"securityCode":  true,
+		"cardNumber":    true,
+		"routingNumber": true,
+	}
+
+	// Fields that require complex structures (arrays with maps) should be excluded
+	complexFields := map[string]bool{
+		"securityQuestion": true, // Requires [{question: "", answer: ""}]
+		"paymentCard":      true, // Requires complex structure
+		"address":          true, // Requires complex structure
+		"phone":            true, // Requires complex structure
+		"bankAccount":      true, // Requires complex structure
+		"keyPair":          true, // Requires complex structure
+		"host":             true, // Can be complex
+		"name":             true, // Can be complex
+		"pamHostname":      true, // Complex structure
+		"pamResources":     true, // Complex structure
+		"script":           true, // Complex structure
+		"passkey":          true, // Complex structure
+	}
+
+	var warnings []string
+	for i := range params.Fields {
+		field := &params.Fields[i]
+		// Skip complex fields that need structured data
+		if complexFields[field.Type] {
+			continue
+		}
+
+		if standardFields[field.Type] && len(field.Value) > 1 {
+			warnings = append(warnings, fmt.Sprintf("Field '%s' has %d values but standard practice is to use only one value", field.Type, len(field.Value)))
+			// Keep only the first value for standard fields
+			field.Value = field.Value[:1]
+		}
+	}
+
 	if err := client.UpdateSecret(params); err != nil {
 		return nil, err
 	}
-	return map[string]interface{}{"uid": params.UID, "message": "Secret updated successfully (confirmed)."}, nil
+
+	response := map[string]interface{}{
+		"uid":     params.UID,
+		"message": "Secret updated successfully (confirmed).",
+	}
+
+	// Add warnings if any
+	if len(warnings) > 0 {
+		response["warnings"] = warnings
+		response["message"] = "Secret updated successfully (confirmed). Note: Multiple values were provided for standard fields but only the first value was used."
+	}
+
+	return response, nil
 }
 
 func (s *Server) executeDeleteSecretConfirmed(client KSMClient, args json.RawMessage) (interface{}, error) {

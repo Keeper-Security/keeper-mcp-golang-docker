@@ -199,71 +199,802 @@ func (c *Client) GetSecret(uid string, fields []string, unmask bool) (map[string
 	result["title"] = record.Title()
 	result["type"] = record.Type()
 
-	// Add requested fields
+	// If no specific fields requested, extract all available fields
 	if len(fields) == 0 {
-		// Return all fields
-		fields = []string{"login", "password", "url", "notes", "custom"}
+		return c.extractAllFields(record, unmask)
 	}
 
+	// Extract requested fields
 	for _, field := range fields {
-		switch field {
-		case "login":
-			if values := record.GetFieldValuesByType("login"); len(values) > 0 {
-				result["login"] = values[0]
+		if value, found := c.extractField(record, field, unmask); found {
+			result[field] = value
+		}
+	}
+
+	return result, nil
+}
+
+// extractAllFields extracts all available fields from a record based on its type
+func (c *Client) extractAllFields(record *sm.Record, unmask bool) (map[string]interface{}, error) {
+	result := make(map[string]interface{})
+
+	// Add basic metadata
+	result["uid"] = record.Uid
+	result["title"] = record.Title()
+	result["type"] = record.Type()
+
+	// Add notes if present
+	if notes := record.Notes(); notes != "" {
+		result["notes"] = notes
+	}
+
+	// Extract all standard fields using SDK methods
+	allFieldTypes := c.getFieldTypesForRecordType(record.Type())
+
+	for _, fieldType := range allFieldTypes {
+		if value, found := c.extractField(record, fieldType, unmask); found {
+			result[fieldType] = value
+		}
+	}
+
+	// Extract custom fields
+	if customFields := c.extractCustomFields(record, unmask); len(customFields) > 0 {
+		result["custom_fields"] = customFields
+	}
+
+	// Extract file information if present
+	if len(record.Files) > 0 {
+		files := make([]map[string]interface{}, len(record.Files))
+		for i, file := range record.Files {
+			files[i] = map[string]interface{}{
+				"name":  file.Name,
+				"title": file.Title,
+				"size":  file.Size,
+				"type":  file.Type,
 			}
-		case "password":
-			// First try the standard Password() method
-			if password := record.Password(); password != "" {
-				if unmask {
-					result["password"] = password
-				} else {
-					result["password"] = maskValue(password)
+		}
+		result["files"] = files
+	}
+
+	return result, nil
+}
+
+// getFieldTypesForRecordType returns the expected field types for a given record type
+func (c *Client) getFieldTypesForRecordType(recordType string) []string {
+	switch recordType {
+	case "login":
+		return []string{"login", "password", "url", "oneTimeCode", "otp"}
+	case "bankCard":
+		return []string{"paymentCard", "text", "pinCode", "addressRef", "cardRef"}
+	case "databaseCredentials":
+		return []string{"host", "login", "password", "databaseType", "text"}
+	case "sshKeys":
+		return []string{"login", "host", "keyPair", "passphrase", "password"}
+	case "serverCredentials":
+		return []string{"host", "login", "password", "text"}
+	case "sslCertificate":
+		return []string{"text", "multiline", "keyPair", "password"}
+	case "file":
+		return []string{"text", "multiline", "fileRef"}
+	case "address":
+		return []string{"address", "name", "phone", "email"}
+	case "bankAccount":
+		return []string{"bankAccount", "name", "login", "password", "accountNumber"}
+	case "driverLicense":
+		return []string{"licenseNumber", "name", "address", "birthDate", "expirationDate", "text"}
+	case "passport":
+		return []string{"text", "name", "birthDate", "expirationDate", "address", "licenseNumber"}
+	case "softwareLicense":
+		return []string{"licenseNumber", "text", "date", "multiline", "login", "password"}
+	case "contact":
+		return []string{"name", "email", "phone", "address", "text"}
+	case "encryptedNotes":
+		return []string{"note", "text", "multiline"}
+	case "membership":
+		return []string{"accountNumber", "name", "password", "login", "text"}
+	case "outdoorLicense":
+		return []string{"licenseNumber", "name", "address", "birthDate", "expirationDate"}
+	case "healthInsurance":
+		return []string{"accountNumber", "name", "login", "password", "text"}
+	case "document":
+		return []string{"text", "multiline", "date", "fileRef"}
+	// PAM (Privileged Access Management) record types
+	case "pamUser":
+		return []string{"login", "password", "host", "pamHostname", "pamResources", "pamSettings"}
+	case "pamMachine":
+		return []string{"pamHostname", "host", "login", "password", "pamResources", "pamSettings", "keyPair"}
+	case "pamDatabase":
+		return []string{"host", "login", "password", "databaseType", "pamResources", "pamSettings"}
+	case "pamDirectory":
+		return []string{"host", "login", "password", "directoryType", "pamResources", "pamSettings"}
+	case "pamRemoteBrowser":
+		return []string{"url", "login", "password", "pamRemoteBrowserSettings", "rbiUrl"}
+	// Network and infrastructure types
+	case "router":
+		return []string{"host", "login", "password", "text", "url"}
+	case "wireless":
+		return []string{"text", "password", "wifiEncryption", "isSSIDHidden"}
+	case "server":
+		return []string{"host", "login", "password", "text", "url"}
+	// Security and authentication types
+	case "passkey":
+		return []string{"passkey", "login", "url", "text"}
+	case "apiCredentials":
+		return []string{"login", "password", "secret", "text", "url"}
+	// Application and service types
+	case "application":
+		return []string{"login", "password", "url", "text", "appFiller"}
+	case "webService":
+		return []string{"url", "login", "password", "secret", "text"}
+	// Financial types
+	case "creditCard":
+		return []string{"paymentCard", "pinCode", "addressRef", "text"}
+	case "investment":
+		return []string{"accountNumber", "login", "password", "text", "url"}
+	// Personal types
+	case "socialSecurityNumber":
+		return []string{"text", "name", "birthDate"}
+	case "taxNumber":
+		return []string{"text", "name", "address"}
+	// Infrastructure scripts and automation
+	case "script":
+		return []string{"script", "text", "multiline", "fileRef"}
+	default:
+		// For unknown types, try comprehensive field list
+		return []string{
+			"login", "password", "url", "text", "multiline", "host", "name", "email", "phone", "address",
+			"oneTimeCode", "otp", "keyPair", "paymentCard", "bankAccount", "accountNumber", "licenseNumber",
+			"secret", "note", "date", "birthDate", "expirationDate", "pinCode", "fileRef", "addressRef",
+			"cardRef", "pamHostname", "pamResources", "pamSettings", "pamRemoteBrowserSettings",
+			"databaseType", "directoryType", "wifiEncryption", "isSSIDHidden", "passkey", "appFiller",
+			"script", "rbiUrl", "dropdown", "checkbox", "recordRef", "schedule", "trafficEncryptionSeed",
+		}
+	}
+}
+
+// extractField extracts a specific field from a record
+func (c *Client) extractField(record *sm.Record, fieldType string, unmask bool) (interface{}, bool) {
+	// Handle special cases first
+	switch fieldType {
+	case "notes":
+		if notes := record.Notes(); notes != "" {
+			return notes, true
+		}
+		return nil, false
+	case "password":
+		// Try standard Password() method first
+		if password := record.Password(); password != "" {
+			if unmask {
+				return password, true
+			}
+			return maskValue(password), true
+		}
+		// Fall through to field extraction for other record types
+	}
+
+	// Try to extract from raw record data for complex fields
+	if value, found := c.extractFromRawFields(record, fieldType, unmask); found {
+		return value, true
+	}
+
+	// Fallback to SDK method for simple string fields
+	values := record.GetFieldValuesByType(fieldType)
+	if len(values) > 0 {
+		value := values[0] // Take first value (string)
+
+		// Apply masking for sensitive fields
+		if !unmask && isSensitiveField(fieldType) {
+			return maskValue(value), true
+		}
+
+		return value, true
+	}
+
+	return nil, false
+}
+
+// extractFromRawFields extracts field data from the raw RecordDict to handle complex field types
+func (c *Client) extractFromRawFields(record *sm.Record, fieldType string, unmask bool) (interface{}, bool) {
+	if record.RecordDict == nil {
+		return nil, false
+	}
+
+	// Check standard fields first
+	if fields, ok := record.RecordDict["fields"].([]interface{}); ok {
+		for _, field := range fields {
+			if fieldMap, ok := field.(map[string]interface{}); ok {
+				if fType, ok := fieldMap["type"].(string); ok && fType == fieldType {
+					return c.processFieldValue(fieldMap, fieldType, unmask)
 				}
-			} else {
-				// For database credentials and other types, check field values
-				if values := record.GetFieldValuesByType("password"); len(values) > 0 {
+			}
+		}
+	}
+
+	// Check custom fields
+	if customFields, ok := record.RecordDict["custom"].([]interface{}); ok {
+		for _, field := range customFields {
+			if fieldMap, ok := field.(map[string]interface{}); ok {
+				if fType, ok := fieldMap["type"].(string); ok && fType == fieldType {
+					return c.processFieldValue(fieldMap, fieldType, unmask)
+				}
+			}
+		}
+	}
+
+	return nil, false
+}
+
+// processFieldValue processes the field value based on its type and structure
+func (c *Client) processFieldValue(fieldMap map[string]interface{}, fieldType string, unmask bool) (interface{}, bool) {
+	value, hasValue := fieldMap["value"]
+	if !hasValue {
+		return nil, false
+	}
+
+	// Handle different field value structures
+	switch fieldType {
+	case "paymentCard", "bankCard":
+		return c.processPaymentCardField(value, unmask)
+	case "address":
+		return c.processAddressField(value, unmask)
+	case "phone":
+		return c.processPhoneField(value, unmask)
+	case "bankAccount":
+		return c.processBankAccountField(value, unmask)
+	case "keyPair":
+		return c.processKeyPairField(value, unmask)
+	case "host":
+		return c.processHostField(value, unmask)
+	case "name":
+		return c.processNameField(value, unmask)
+	case "securityQuestion":
+		return c.processSecurityQuestionField(value, unmask)
+	case "pamHostname":
+		return c.processPamHostnameField(value, unmask)
+	case "pamResources":
+		return c.processPamResourcesField(value, unmask)
+	case "pamSettings":
+		return c.processPamSettingsField(value, unmask)
+	case "pamRemoteBrowserSettings":
+		return c.processPamRemoteBrowserSettingsField(value, unmask)
+	case "script":
+		return c.processScriptField(value, unmask)
+	case "passkey":
+		return c.processPasskeyField(value, unmask)
+	case "appFiller":
+		return c.processAppFillerField(value, unmask)
+	case "schedule":
+		return c.processScheduleField(value, unmask)
+	case "directoryType", "databaseType", "wifiEncryption":
+		return c.processSimpleField(value, fieldType, unmask)
+	case "isSSIDHidden", "checkbox":
+		return c.processBooleanField(value, fieldType, unmask)
+	default:
+		// Handle simple field types (string, array of strings, etc.)
+		return c.processSimpleField(value, fieldType, unmask)
+	}
+}
+
+// processPaymentCardField handles credit card field structures
+func (c *Client) processPaymentCardField(value interface{}, unmask bool) (interface{}, bool) {
+	if valueArray, ok := value.([]interface{}); ok && len(valueArray) > 0 {
+		if cardData, ok := valueArray[0].(map[string]interface{}); ok {
+			result := make(map[string]interface{})
+
+			if cardNumber, ok := cardData["cardNumber"].(string); ok {
+				if unmask {
+					result["cardNumber"] = cardNumber
+				} else {
+					result["cardNumber"] = maskValue(cardNumber)
+				}
+			}
+
+			if expDate, ok := cardData["cardExpirationDate"].(string); ok {
+				result["cardExpirationDate"] = expDate
+			}
+
+			if secCode, ok := cardData["cardSecurityCode"].(string); ok {
+				if unmask {
+					result["cardSecurityCode"] = secCode
+				} else {
+					result["cardSecurityCode"] = maskValue(secCode)
+				}
+			}
+
+			return result, true
+		}
+	}
+	return nil, false
+}
+
+// processAddressField handles address field structures
+func (c *Client) processAddressField(value interface{}, unmask bool) (interface{}, bool) {
+	if valueArray, ok := value.([]interface{}); ok && len(valueArray) > 0 {
+		if addressData, ok := valueArray[0].(map[string]interface{}); ok {
+			result := make(map[string]interface{})
+
+			if street1, ok := addressData["street1"].(string); ok {
+				result["street1"] = street1
+			}
+			if street2, ok := addressData["street2"].(string); ok {
+				result["street2"] = street2
+			}
+			if city, ok := addressData["city"].(string); ok {
+				result["city"] = city
+			}
+			if state, ok := addressData["state"].(string); ok {
+				result["state"] = state
+			}
+			if country, ok := addressData["country"].(string); ok {
+				result["country"] = country
+			}
+			if zip, ok := addressData["zip"].(string); ok {
+				result["zip"] = zip
+			}
+
+			return result, true
+		}
+	}
+	return nil, false
+}
+
+// processPhoneField handles phone field structures
+func (c *Client) processPhoneField(value interface{}, unmask bool) (interface{}, bool) {
+	if valueArray, ok := value.([]interface{}); ok && len(valueArray) > 0 {
+		if phoneData, ok := valueArray[0].(map[string]interface{}); ok {
+			result := make(map[string]interface{})
+
+			if region, ok := phoneData["region"].(string); ok {
+				result["region"] = region
+			}
+			if number, ok := phoneData["number"].(string); ok {
+				result["number"] = number
+			}
+			if ext, ok := phoneData["ext"].(string); ok {
+				result["ext"] = ext
+			}
+			if phoneType, ok := phoneData["type"].(string); ok {
+				result["type"] = phoneType
+			}
+
+			return result, true
+		}
+	}
+	return nil, false
+}
+
+// processBankAccountField handles bank account field structures
+func (c *Client) processBankAccountField(value interface{}, unmask bool) (interface{}, bool) {
+	if valueArray, ok := value.([]interface{}); ok && len(valueArray) > 0 {
+		if bankData, ok := valueArray[0].(map[string]interface{}); ok {
+			result := make(map[string]interface{})
+
+			if accountType, ok := bankData["accountType"].(string); ok {
+				result["accountType"] = accountType
+			}
+			if routingNumber, ok := bankData["routingNumber"].(string); ok {
+				if unmask {
+					result["routingNumber"] = routingNumber
+				} else {
+					result["routingNumber"] = maskValue(routingNumber)
+				}
+			}
+			if accountNumber, ok := bankData["accountNumber"].(string); ok {
+				if unmask {
+					result["accountNumber"] = accountNumber
+				} else {
+					result["accountNumber"] = maskValue(accountNumber)
+				}
+			}
+			if otherType, ok := bankData["otherType"].(string); ok {
+				result["otherType"] = otherType
+			}
+
+			return result, true
+		}
+	}
+	return nil, false
+}
+
+// processKeyPairField handles SSH key pair field structures
+func (c *Client) processKeyPairField(value interface{}, unmask bool) (interface{}, bool) {
+	if valueArray, ok := value.([]interface{}); ok && len(valueArray) > 0 {
+		if keyData, ok := valueArray[0].(map[string]interface{}); ok {
+			result := make(map[string]interface{})
+
+			if publicKey, ok := keyData["publicKey"].(string); ok {
+				result["publicKey"] = publicKey
+			}
+			if privateKey, ok := keyData["privateKey"].(string); ok {
+				if unmask {
+					result["privateKey"] = privateKey
+				} else {
+					result["privateKey"] = maskValue(privateKey)
+				}
+			}
+
+			return result, true
+		}
+	}
+	return nil, false
+}
+
+// processHostField handles host field structures
+func (c *Client) processHostField(value interface{}, unmask bool) (interface{}, bool) {
+	if valueArray, ok := value.([]interface{}); ok && len(valueArray) > 0 {
+		if hostData, ok := valueArray[0].(map[string]interface{}); ok {
+			result := make(map[string]interface{})
+
+			if hostname, ok := hostData["hostName"].(string); ok {
+				result["hostName"] = hostname
+			}
+			if port, ok := hostData["port"].(string); ok {
+				result["port"] = port
+			}
+
+			return result, true
+		}
+	}
+	return nil, false
+}
+
+// processNameField handles name field structures
+func (c *Client) processNameField(value interface{}, unmask bool) (interface{}, bool) {
+	if valueArray, ok := value.([]interface{}); ok && len(valueArray) > 0 {
+		if nameData, ok := valueArray[0].(map[string]interface{}); ok {
+			result := make(map[string]interface{})
+
+			if first, ok := nameData["first"].(string); ok {
+				result["first"] = first
+			}
+			if middle, ok := nameData["middle"].(string); ok {
+				result["middle"] = middle
+			}
+			if last, ok := nameData["last"].(string); ok {
+				result["last"] = last
+			}
+
+			return result, true
+		}
+	}
+	return nil, false
+}
+
+// processSecurityQuestionField handles security question field structures
+func (c *Client) processSecurityQuestionField(value interface{}, unmask bool) (interface{}, bool) {
+	if valueArray, ok := value.([]interface{}); ok && len(valueArray) > 0 {
+		if sqData, ok := valueArray[0].(map[string]interface{}); ok {
+			result := make(map[string]interface{})
+
+			if question, ok := sqData["question"].(string); ok {
+				result["question"] = question
+			}
+			if answer, ok := sqData["answer"].(string); ok {
+				if unmask {
+					result["answer"] = answer
+				} else {
+					result["answer"] = maskValue(answer)
+				}
+			}
+
+			return result, true
+		}
+	}
+	return nil, false
+}
+
+// processSimpleField handles simple field types (strings, arrays, etc.)
+func (c *Client) processSimpleField(value interface{}, fieldType string, unmask bool) (interface{}, bool) {
+	if valueArray, ok := value.([]interface{}); ok && len(valueArray) > 0 {
+		firstValue := valueArray[0]
+
+		// Convert to string for processing
+		var stringValue string
+		switch v := firstValue.(type) {
+		case string:
+			stringValue = v
+		case float64:
+			stringValue = fmt.Sprintf("%.0f", v)
+		case int:
+			stringValue = fmt.Sprintf("%d", v)
+		case bool:
+			stringValue = fmt.Sprintf("%t", v)
+		default:
+			stringValue = fmt.Sprintf("%v", v)
+		}
+
+		// Apply masking for sensitive fields
+		if !unmask && isSensitiveField(fieldType) {
+			return maskValue(stringValue), true
+		}
+
+		return stringValue, true
+	}
+
+	return nil, false
+}
+
+// processBooleanField handles boolean field types
+func (c *Client) processBooleanField(value interface{}, fieldType string, unmask bool) (interface{}, bool) {
+	if valueArray, ok := value.([]interface{}); ok && len(valueArray) > 0 {
+		if boolValue, ok := valueArray[0].(bool); ok {
+			return boolValue, true
+		}
+	}
+	return nil, false
+}
+
+// processPamHostnameField handles PAM hostname field structures
+func (c *Client) processPamHostnameField(value interface{}, unmask bool) (interface{}, bool) {
+	if valueArray, ok := value.([]interface{}); ok && len(valueArray) > 0 {
+		if hostData, ok := valueArray[0].(map[string]interface{}); ok {
+			result := make(map[string]interface{})
+
+			if hostname, ok := hostData["hostName"].(string); ok {
+				result["hostName"] = hostname
+			}
+			if port, ok := hostData["port"].(string); ok {
+				result["port"] = port
+			}
+
+			return result, true
+		}
+	}
+	return nil, false
+}
+
+// processPamResourcesField handles PAM resources field structures
+func (c *Client) processPamResourcesField(value interface{}, unmask bool) (interface{}, bool) {
+	if valueArray, ok := value.([]interface{}); ok && len(valueArray) > 0 {
+		var resources []map[string]interface{}
+
+		for _, item := range valueArray {
+			if resourceData, ok := item.(map[string]interface{}); ok {
+				result := make(map[string]interface{})
+
+				if controllerUid, ok := resourceData["controllerUid"].(string); ok {
+					result["controllerUid"] = controllerUid
+				}
+				if folderUid, ok := resourceData["folderUid"].(string); ok {
+					result["folderUid"] = folderUid
+				}
+				if resourceRef, ok := resourceData["resourceRef"].([]interface{}); ok {
+					result["resourceRef"] = resourceRef
+				}
+				if allowedSettings, ok := resourceData["allowedSettings"].(map[string]interface{}); ok {
+					result["allowedSettings"] = allowedSettings
+				}
+
+				resources = append(resources, result)
+			}
+		}
+
+		if len(resources) > 0 {
+			return resources, true
+		}
+	}
+	return nil, false
+}
+
+// processPamSettingsField handles PAM settings field structures
+func (c *Client) processPamSettingsField(value interface{}, unmask bool) (interface{}, bool) {
+	if valueArray, ok := value.([]interface{}); ok && len(valueArray) > 0 {
+		if settingsData, ok := valueArray[0].(map[string]interface{}); ok {
+			result := make(map[string]interface{})
+
+			if portForward, ok := settingsData["portForward"].([]interface{}); ok {
+				result["portForward"] = portForward
+			}
+			if connection, ok := settingsData["connection"].([]interface{}); ok {
+				result["connection"] = connection
+			}
+
+			return result, true
+		}
+	}
+	return nil, false
+}
+
+// processPamRemoteBrowserSettingsField handles PAM remote browser settings field structures
+func (c *Client) processPamRemoteBrowserSettingsField(value interface{}, unmask bool) (interface{}, bool) {
+	if valueArray, ok := value.([]interface{}); ok && len(valueArray) > 0 {
+		if settingsData, ok := valueArray[0].(map[string]interface{}); ok {
+			result := make(map[string]interface{})
+
+			if connection, ok := settingsData["connection"].(map[string]interface{}); ok {
+				result["connection"] = connection
+			}
+
+			return result, true
+		}
+	}
+	return nil, false
+}
+
+// processScriptField handles script field structures
+func (c *Client) processScriptField(value interface{}, unmask bool) (interface{}, bool) {
+	if valueArray, ok := value.([]interface{}); ok && len(valueArray) > 0 {
+		var scripts []map[string]interface{}
+
+		for _, item := range valueArray {
+			if scriptData, ok := item.(map[string]interface{}); ok {
+				result := make(map[string]interface{})
+
+				if fileRef, ok := scriptData["fileRef"].(string); ok {
+					result["fileRef"] = fileRef
+				}
+				if command, ok := scriptData["command"].(string); ok {
 					if unmask {
-						result["password"] = values[0]
+						result["command"] = command
 					} else {
-						result["password"] = maskValue(values[0])
+						result["command"] = maskValue(command)
 					}
 				}
+				if recordRef, ok := scriptData["recordRef"].([]interface{}); ok {
+					result["recordRef"] = recordRef
+				}
+
+				scripts = append(scripts, result)
 			}
-		case "url":
-			if values := record.GetFieldValuesByType("url"); len(values) > 0 {
-				result["url"] = values[0]
+		}
+
+		if len(scripts) > 0 {
+			return scripts, true
+		}
+	}
+	return nil, false
+}
+
+// processPasskeyField handles passkey field structures
+func (c *Client) processPasskeyField(value interface{}, unmask bool) (interface{}, bool) {
+	if valueArray, ok := value.([]interface{}); ok && len(valueArray) > 0 {
+		var passkeys []map[string]interface{}
+
+		for _, item := range valueArray {
+			if passkeyData, ok := item.(map[string]interface{}); ok {
+				result := make(map[string]interface{})
+
+				if credentialId, ok := passkeyData["credentialId"].(string); ok {
+					result["credentialId"] = credentialId
+				}
+				if userId, ok := passkeyData["userId"].(string); ok {
+					result["userId"] = userId
+				}
+				if relyingParty, ok := passkeyData["relyingParty"].(string); ok {
+					result["relyingParty"] = relyingParty
+				}
+				if username, ok := passkeyData["username"].(string); ok {
+					result["username"] = username
+				}
+				if createdDate, ok := passkeyData["createdDate"].(float64); ok {
+					result["createdDate"] = createdDate
+				}
+				if signCount, ok := passkeyData["signCount"].(float64); ok {
+					result["signCount"] = signCount
+				}
+				if privateKey, ok := passkeyData["privateKey"].(map[string]interface{}); ok {
+					if unmask {
+						result["privateKey"] = privateKey
+					} else {
+						result["privateKey"] = "***MASKED***"
+					}
+				}
+
+				passkeys = append(passkeys, result)
 			}
-		case "notes":
-			if notes := record.Notes(); notes != "" {
-				result["notes"] = notes
+		}
+
+		if len(passkeys) > 0 {
+			return passkeys, true
+		}
+	}
+	return nil, false
+}
+
+// processAppFillerField handles app filler field structures
+func (c *Client) processAppFillerField(value interface{}, unmask bool) (interface{}, bool) {
+	if valueArray, ok := value.([]interface{}); ok && len(valueArray) > 0 {
+		var appFillers []map[string]interface{}
+
+		for _, item := range valueArray {
+			if fillerData, ok := item.(map[string]interface{}); ok {
+				result := make(map[string]interface{})
+
+				if appTitle, ok := fillerData["applicationTitle"].(string); ok {
+					result["applicationTitle"] = appTitle
+				}
+				if contentFilter, ok := fillerData["contentFilter"].(string); ok {
+					result["contentFilter"] = contentFilter
+				}
+				if macroSequence, ok := fillerData["macroSequence"].(string); ok {
+					if unmask {
+						result["macroSequence"] = macroSequence
+					} else {
+						result["macroSequence"] = maskValue(macroSequence)
+					}
+				}
+
+				appFillers = append(appFillers, result)
 			}
-		case "custom":
-			// Handle custom fields
-			customFields := make(map[string]interface{})
-			// Try to get custom fields - the SDK might expose them differently
-			// We'll use the raw record dictionary
-			if recordDict := record.RecordDict; recordDict != nil {
-				if customFieldsData, exists := recordDict["custom"]; exists {
-					if customFieldsList, ok := customFieldsData.([]interface{}); ok {
-						for _, field := range customFieldsList {
-							if fieldMap, ok := field.(map[string]interface{}); ok {
-								if label, hasLabel := fieldMap["label"].(string); hasLabel {
-									if value, hasValue := fieldMap["value"]; hasValue {
+		}
+
+		if len(appFillers) > 0 {
+			return appFillers, true
+		}
+	}
+	return nil, false
+}
+
+// processScheduleField handles schedule field structures
+func (c *Client) processScheduleField(value interface{}, unmask bool) (interface{}, bool) {
+	if valueArray, ok := value.([]interface{}); ok && len(valueArray) > 0 {
+		var schedules []map[string]interface{}
+
+		for _, item := range valueArray {
+			if scheduleData, ok := item.(map[string]interface{}); ok {
+				result := make(map[string]interface{})
+
+				if scheduleType, ok := scheduleData["type"].(string); ok {
+					result["type"] = scheduleType
+				}
+				if cron, ok := scheduleData["cron"].(string); ok {
+					result["cron"] = cron
+				}
+				if time, ok := scheduleData["time"].(string); ok {
+					result["time"] = time
+				}
+				if tz, ok := scheduleData["tz"].(string); ok {
+					result["tz"] = tz
+				}
+				if weekday, ok := scheduleData["weekday"].(string); ok {
+					result["weekday"] = weekday
+				}
+				if intervalCount, ok := scheduleData["intervalCount"].(float64); ok {
+					result["intervalCount"] = intervalCount
+				}
+
+				schedules = append(schedules, result)
+			}
+		}
+
+		if len(schedules) > 0 {
+			return schedules, true
+		}
+	}
+	return nil, false
+}
+
+// extractCustomFields extracts all custom fields from a record
+func (c *Client) extractCustomFields(record *sm.Record, unmask bool) map[string]interface{} {
+	customFields := make(map[string]interface{})
+
+	// Try to get custom fields from the raw record dictionary
+	if record.RecordDict != nil {
+		if customFieldsData, exists := record.RecordDict["custom"]; exists {
+			if customFieldsList, ok := customFieldsData.([]interface{}); ok {
+				for _, field := range customFieldsList {
+					if fieldMap, ok := field.(map[string]interface{}); ok {
+						if label, hasLabel := fieldMap["label"].(string); hasLabel {
+							if value, hasValue := fieldMap["value"]; hasValue {
+								// Apply masking for sensitive custom fields
+								if !unmask && isSensitiveField(label) {
+									if str, ok := value.(string); ok {
+										customFields[label] = maskValue(str)
+									} else {
 										customFields[label] = value
 									}
+								} else {
+									customFields[label] = value
 								}
 							}
 						}
 					}
 				}
 			}
-			if len(customFields) > 0 {
-				result["custom_fields"] = customFields
-			}
 		}
 	}
 
-	return result, nil
+	return customFields
 }
 
 // SearchSecrets searches for secrets by query
@@ -1102,7 +1833,9 @@ func isSensitiveField(field string) bool {
 	sensitiveFields := []string{
 		"password", "secret", "key", "token", "privateKey",
 		"cardNumber", "cardSecurityCode", "accountNumber",
-		"pin", "passphrase", "auth",
+		"pin", "passphrase", "auth", "routingNumber",
+		"licenseNumber", "oneTimeCode", "otp", "answer",
+		"paymentCard", "bankAccount", "keyPair",
 	}
 
 	fieldLower := strings.ToLower(field)
