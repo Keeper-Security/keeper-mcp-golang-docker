@@ -105,7 +105,7 @@ func (s *Server) executeGetSecret(client KSMClient, args json.RawMessage) (inter
 
 	return map[string]interface{}{
 		"status":               "confirmation_required",
-		"message":              fmt.Sprintf("Confirmation required to %s. Use the 'ksm_confirm_action' prompt.", actionDescription),
+		"message":              fmt.Sprintf("Keeper Secrets Manager requires confirmation to %s. Use the 'ksm_confirm_action' prompt.", actionDescription),
 		"confirmation_details": confirmationDetails,
 	}, nil
 }
@@ -306,7 +306,7 @@ func (s *Server) executeCreateSecret(client KSMClient, args json.RawMessage) (in
 
 	return map[string]interface{}{
 		"status":               "confirmation_required",
-		"message":              fmt.Sprintf("Confirmation required to %s. Use the 'ksm_confirm_action' prompt.", actionDescription),
+		"message":              fmt.Sprintf("Keeper Secrets Manager requires confirmation to %s. Use the 'ksm_confirm_action' prompt.", actionDescription),
 		"confirmation_details": confirmationDetails,
 	}, nil
 }
@@ -350,7 +350,7 @@ func (s *Server) executeUpdateSecret(client KSMClient, args json.RawMessage) (in
 
 	return map[string]interface{}{
 		"status":               "confirmation_required",
-		"message":              fmt.Sprintf("Confirmation required to %s. Use the 'ksm_confirm_action' prompt.", actionDescription),
+		"message":              fmt.Sprintf("Keeper Secrets Manager requires confirmation to %s. Use the 'ksm_confirm_action' prompt.", actionDescription),
 		"confirmation_details": confirmationDetails,
 	}, nil
 }
@@ -393,7 +393,7 @@ func (s *Server) executeDeleteSecret(client KSMClient, args json.RawMessage) (in
 
 	return map[string]interface{}{
 		"status":               "confirmation_required",
-		"message":              fmt.Sprintf("Confirmation required to %s. Use the 'ksm_confirm_action' prompt.", actionDescription),
+		"message":              fmt.Sprintf("Keeper Secrets Manager requires confirmation to %s. Use the 'ksm_confirm_action' prompt.", actionDescription),
 		"confirmation_details": confirmationDetails,
 	}, nil
 }
@@ -440,7 +440,7 @@ func (s *Server) executeUploadFile(client KSMClient, args json.RawMessage) (inte
 
 	return map[string]interface{}{
 		"status":               "confirmation_required",
-		"message":              fmt.Sprintf("Confirmation required to %s. Use the 'ksm_confirm_action' prompt.", actionDescription),
+		"message":              fmt.Sprintf("Keeper Secrets Manager requires confirmation to %s. Use the 'ksm_confirm_action' prompt.", actionDescription),
 		"confirmation_details": confirmationDetails,
 	}, nil
 }
@@ -524,7 +524,7 @@ func (s *Server) executeCreateFolder(client KSMClient, args json.RawMessage) (in
 
 	return map[string]interface{}{
 		"status":               "confirmation_required",
-		"message":              fmt.Sprintf("Confirmation required to %s. Use the 'ksm_confirm_action' prompt.", actionDescription),
+		"message":              fmt.Sprintf("Keeper Secrets Manager requires confirmation to %s. Use the 'ksm_confirm_action' prompt.", actionDescription),
 		"confirmation_details": confirmationDetails,
 	}, nil
 }
@@ -881,7 +881,7 @@ func (s *Server) executeDeleteFolder(client KSMClient, args json.RawMessage) (in
 
 	return map[string]interface{}{
 		"status":               "confirmation_required",
-		"message":              fmt.Sprintf("Confirmation required to %s. Use the 'ksm_confirm_action' prompt.", actionDescription),
+		"message":              fmt.Sprintf("Keeper Secrets Manager requires confirmation to %s. Use the 'ksm_confirm_action' prompt.", actionDescription),
 		"confirmation_details": confirmationDetails,
 	}, nil
 }
