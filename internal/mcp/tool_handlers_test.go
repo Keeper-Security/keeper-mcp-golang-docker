@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
 	"testing"
 
 	"github.com/keeper-security/ksm-mcp/internal/audit"
+	"github.com/keeper-security/ksm-mcp/internal/recordtemplates"
 	"github.com/keeper-security/ksm-mcp/internal/ui"
 	"github.com/keeper-security/ksm-mcp/pkg/types"
 	"github.com/stretchr/testify/assert"
@@ -140,38 +142,37 @@ func TestExecuteCreateSecret(t *testing.T) {
 		validate      func(*testing.T, interface{})
 	}{
 		{
-			name:          "successful create - confirmation path",
+			name:          "successful create - confirmation path - folder_uid MISSING",
 			args:          json.RawMessage(`{"type":"login","title":"Test Secret C","fields":[]}`),
 			serverOptions: &ServerOptions{BatchMode: false, AutoApprove: false},
 			expectError:   false,
-			mockSetup:     func(client *mockKSMClient, confirmer *mockConfirmer) {},
-			validate: func(t *testing.T, result interface{}) {
-				resultMap := result.(map[string]interface{})
-				assert.Equal(t, "confirmation_required", resultMap["status"])
-				assert.Contains(t, resultMap["message"].(string), "Keeper Secrets Manager requires confirmation to Create new KSM secret titled 'Test Secret C'")
-				details, ok := resultMap["confirmation_details"].(map[string]interface{})
-				assert.True(t, ok)
-				assert.Equal(t, "ksm_confirm_action", details["prompt_name"])
-				promptArgs, _ := details["prompt_arguments"].(map[string]interface{})
-				assert.Equal(t, "create_secret", promptArgs["original_tool_name"])
-			},
-		},
-		{
-			name:          "successful create - batch mode",
-			args:          json.RawMessage(`{"type":"login","title":"Test Secret B","fields":[]}`),
-			serverOptions: &ServerOptions{BatchMode: true, AutoApprove: false},
-			expectError:   false,
 			mockSetup: func(client *mockKSMClient, confirmer *mockConfirmer) {
 				client.On("ListFolders").Return(&types.ListFoldersResponse{
-					Folders: []types.FolderInfo{{UID: "root_folder", Name: "My Root", ParentUID: ""}},
+					Folders: []types.FolderInfo{{UID: "root_folder_confirm", Name: "My Confirm Root", ParentUID: ""}},
 				}, nil).Once()
 			},
 			validate: func(t *testing.T, result interface{}) {
 				resultMap, ok := result.(map[string]interface{})
 				assert.True(t, ok, "Result should be a map")
 				assert.Equal(t, "folder_required_clarification", resultMap["status"])
-				assert.Contains(t, resultMap["message"].(string), "Folder UID (folder_uid) is required to create secret 'Test Secret B'.")
+				assert.Contains(t, resultMap["message"].(string), "Folder UID (folder_uid) is required to create secret 'Test Secret C'.")
 				assert.NotNil(t, resultMap["available_folders"])
+			},
+		},
+		{
+			name:          "successful create - batch mode - folder_uid PRESENT",
+			args:          json.RawMessage(`{"type":"login","title":"Test Secret Batch With Folder","fields":[], "folder_uid":"folder_abc"}`),
+			serverOptions: &ServerOptions{BatchMode: true, AutoApprove: false},
+			expectError:   false,
+			mockSetup: func(client *mockKSMClient, confirmer *mockConfirmer) {
+				client.On("CreateSecret", mock.MatchedBy(func(p types.CreateSecretParams) bool {
+					return p.Title == "Test Secret Batch With Folder" && p.FolderUID == "folder_abc"
+				})).Return("test-uid-batch-with-folder", nil)
+			},
+			validate: func(t *testing.T, result interface{}) {
+				resultMap := result.(map[string]interface{})
+				assert.Equal(t, "test-uid-batch-with-folder", resultMap["uid"])
+				assert.Contains(t, resultMap["message"].(string), "Secret created successfully (confirmed).")
 			},
 		},
 		{
@@ -633,7 +634,6 @@ func TestExecuteKsmExecuteConfirmedAction(t *testing.T) {
 			}`),
 			expectError: false,
 			mockClientSetup: func(client *mockKSMClient) {
-				// client.On("ListFolders").Return(&types.ListFoldersResponse{Folders: []types.FolderInfo{}}, nil) // Tentatively add this - if folder_uid is truly empty, this will be hit.
 				client.On("CreateSecret", mock.MatchedBy(func(p types.CreateSecretParams) bool {
 					return p.Title == "Confirmed Secret" && p.FolderUID == "mock_folder_uid"
 				})).Return("confirmed-uid", nil)
@@ -720,6 +720,108 @@ func TestExecuteKsmExecuteConfirmedAction(t *testing.T) {
 				}
 			}
 			mockClient.AssertExpectations(t)
+		})
+	}
+}
+
+func TestExecuteGetRecordTypeSchema(t *testing.T) {
+	// Ensure templates are loaded (essential for this test)
+	// The path needs to point to the *actual* location of your record-templates checkout
+	// relative to where `go test` is run, or use an absolute path for simplicity in test.
+	// For CI, this path might need to be adjusted or templates copied to a known relative location.
+	// Since we are now using embed, this explicit LoadRecordTemplates with a path is for testing setup if needed,
+	// but the server itself will use the parameterless version.
+	// However, for an isolated test of GetSchema directly, we might need to ensure loaded* maps are populated.
+
+	// For this test, we rely on the server startup in a real scenario to call LoadRecordTemplates().
+	// Here, we will call it directly if it helps, assuming files are in `../internal/recordtemplates/files` relative to this test file package (mcp)
+	// This relative path is fragile. Best practice for unit testing GetSchema directly would be to mock the loader's access to loaded maps,
+	// or ensure LoadRecordTemplates() is reliably called in a TestMain or per-test setup with correct embed resolution.
+
+	// Let's assume LoadRecordTemplates() is called by server init implicitly or we call it manually.
+	// Forcing a load here for test isolation might be needed if not run via full server startup.
+	testTemplateBasePath := "../../internal/recordtemplates/files" // Adjust if your test execution path is different
+	// Check if the directory exists to prevent test failure due to path issues
+	if _, err := os.Stat(testTemplateBasePath); os.IsNotExist(err) {
+		t.Fatalf("Test setup error: Record templates directory does not exist at %s. Ensure templates are copied to ksm-mcp/internal/recordtemplates/files/", testTemplateBasePath)
+	}
+
+	err := recordtemplates.LoadRecordTemplates() // Uses embedded files
+	assert.NoError(t, err, "LoadRecordTemplates should not error with embedded files")
+	parseErrs := recordtemplates.GetParseErrors()
+	assert.Empty(t, parseErrs, "There should be no template parsing errors for embedded files")
+
+	mockClient := new(mockKSMClient) // Not strictly used by GetRecordTypeSchema but part of server signature
+	logger, _ := audit.NewLogger(audit.Config{FilePath: "/tmp/test-schema-audit.log"})
+	server := &Server{
+		logger:  logger,
+		options: &ServerOptions{},
+	}
+	server.getCurrentClient = func() (KSMClient, error) { return mockClient, nil } // Satisfy handler
+
+	tests := []struct {
+		name               string
+		args               json.RawMessage
+		expectError        bool
+		expectedRecordType string
+		expectedFields     map[string]types.SchemaField // Map of expected field name to its schema
+	}{
+		{
+			name:               "get pamUser schema",
+			args:               json.RawMessage(`{"type":"pamUser"}`),
+			expectError:        false,
+			expectedRecordType: "pamUser",
+			expectedFields: map[string]types.SchemaField{
+				"login":                     {Name: "login", Type: "login", Required: true, Description: "Login field, detected as the website login for browser extension or KFFA."},
+				"password":                  {Name: "password", Type: "password", Description: "Field value is masked and allows for generation. Also complexity enforcements."},
+				"rotationScripts.command":   {Name: "rotationScripts.command", Type: "string", Description: "Script execution details - command"},
+				"rotationScripts.fileRef":   {Name: "rotationScripts.fileRef", Type: "string", Description: "Script execution details - fileRef"},
+				"rotationScripts.recordRef": {Name: "rotationScripts.recordRef", Type: "string", Description: "Script execution details - recordRef"},
+				"privatePEMKey":             {Name: "privatePEMKey", Type: "secret", Description: "the field value is masked"},
+				"distinguishedName":         {Name: "distinguishedName", Type: "text", Description: "plain text"},
+				"connectDatabase":           {Name: "connectDatabase", Type: "text", Description: "plain text"},
+				"managed":                   {Name: "managed", Type: "checkbox", Description: "on/off checkbox"},
+				"fileRef":                   {Name: "fileRef", Type: "fileRef", Description: "reference to the file field on another record"},
+				"oneTimeCode":               {Name: "oneTimeCode", Type: "otp", Description: "captures the seed, displays QR code"},
+			},
+		},
+		{
+			name:        "type not found",
+			args:        json.RawMessage(`{"type":"nonExistentType"}`),
+			expectError: true,
+		},
+		{
+			name:        "empty type",
+			args:        json.RawMessage(`{"type":""}`),
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := server.executeGetRecordTypeSchema(mockClient, tt.args)
+
+			if tt.expectError {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+			assert.NotNil(t, result)
+
+			schema, ok := result.(*types.RecordTypeSchema)
+			assert.True(t, ok, "Result should be of type *types.RecordTypeSchema")
+			assert.Equal(t, tt.expectedRecordType, schema.RecordType)
+
+			assert.Len(t, schema.Fields, len(tt.expectedFields), "Number of fields should match")
+
+			for _, actualField := range schema.Fields {
+				expectedField, found := tt.expectedFields[actualField.Name]
+				assert.True(t, found, "Field %s found in schema but not expected", actualField.Name)
+				assert.Equal(t, expectedField.Name, actualField.Name, "Field name mismatch for %s", expectedField.Name)
+				assert.Equal(t, expectedField.Type, actualField.Type, "Field type mismatch for %s", expectedField.Name)
+				assert.Equal(t, expectedField.Required, actualField.Required, "Field required mismatch for %s", expectedField.Name)
+				assert.Equal(t, expectedField.Description, actualField.Description, "Field description mismatch for %s", expectedField.Name)
+			}
 		})
 	}
 }

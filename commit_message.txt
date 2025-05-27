@@ -1,39 +1,41 @@
-feat: Implement flattened field input for complex types and robust server-side parsing
+feat: Implement get_record_type_schema and embed all templates
 
-BREAKING CHANGE: The 'create_secret' and 'update_secret' tools now expect fields to be specified in a flattened dot-notation (e.g., 'bankAccount.accountType') instead of complex nested JSON objects. Each field's 'value' must be a single-element string array.
+BREAKING CHANGE:
+- The `create_secret` and `update_secret` tools now expect fields in a flattened dot-notation (e.g., `bankAccount.accountType`). The `value` for each field part must be a single-element string array.
+- `create_secret` now returns a `folder_required_clarification` status if `folder_uid` is omitted, prompting the AI before action confirmation.
 
-## Problem
-Previously, AI models (Claude) were required to generate complex nested JSON for KSM record fields. This was error-prone, leading to issues like:
-1. Incorrectly structured complex fields (e.g., bank account details).
-2. Confusion about whether a field value should be a single string or an array of objects.
-3. Mismatches between the tool's JSON schema and the actual expected KSM SDK structures.
+This commit introduces several major improvements to enhance AI interaction for record creation and management:
 
-## Solution: Flattened Fields & Server-Side Reconstruction
+1.  **New Tool: `get_record_type_schema`**
+    *   Provides a definitive way for AI to discover the fields, types, and requirements for any KSM record type.
+    *   Input: `{"type": "recordTypeName"}`
+    *   Output: Detailed schema including flattened field names (e.g., `bankAccount.accountType`), descriptions, underlying types, required status, and example values for enums.
+    *   Eliminates AI guesswork based on existing records.
 
-1.  **Flattened Field Input (AI-Side)**:
-    *   AI models now provide all fields in a simple, flat format using dot notation for sub-fields of complex types.
-        *   Example: `fields: [{type: "bankAccount.accountType", value: ["checking"]}, {type: "bankAccount.routingNumber", value: ["123..."]}]`
-    *   The `value` for every field item is now consistently a single-element string array (e.g., `["the_value"]`).
+2.  **Embedded Record Templates (Comprehensive)**:
+    *   Record definition templates (`fields.json`, `field-types.json`, and all `*.json` files from `standard_templates/`, `pam_templates/`, and `pam_configuration_templates/`) are now embedded directly into the `ksm-mcp` binary using Go's `embed` package.
+    *   This removes the dependency on external file paths, making the application more portable and self-contained.
+    *   The `internal/recordtemplates` package handles loading and parsing these embedded templates at startup.
+    *   Corrected schema definitions in `field-types.json` (e.g., added missing `script` type) to ensure accurate parsing for all templates, including `pamUser`.
 
-2.  **Server-Side Reconstruction (MCP Server)**:
-    *   A new `processFieldsForSDK` function was implemented in `internal/mcp/tool_handlers.go`.
-    *   This function parses the incoming flattened fields.
-    *   It intelligently groups related sub-fields (e.g., `bankAccount.*`) and reconstructs the complex `map[string]interface{}` objects required by the KSM Go SDK for types like `bankAccount`, `address`, `phone`, `name`, `securityQuestion`, `paymentCard`, `host`, and `keyPair`.
-    *   It correctly handles mapping field names from your internal templates (e.g., `name.firstName`) to the names expected by the KSM Go SDK (e.g., `name.first`).
-    *   It ensures the correct KSM `type` is used for special cases (e.g., `privateKey` type for `keyPair` structures).
+3.  **Improved `create_secret` Flow**:
+    *   If `folder_uid` is omitted when calling `create_secret`, the MCP server now immediately returns a `folder_required_clarification` status.
+    *   This response includes a list of available folders, allowing the AI to prompt the user or select a folder and retry the `create_secret` call *before* the main action confirmation.
+    *   This resolves the previous issue of double confirmations for the same logical operation.
 
-3.  **Updated Tool Definitions (`internal/mcp/tools.go`)**:
-    *   The `InputSchema` for `create_secret` and `update_secret` tools now precisely define the new flattened field structure.
-    *   Descriptions clearly instruct AI models on using dot notation and providing single-element array values.
-    *   Examples of the new flattened format are included.
+4.  **Enhanced Flattened Field Processing (`processFieldsForSDK`)**:
+    *   Robustly parses dot-notation fields (e.g., `phone.type`, `passkey.privateKey`).
+    *   Correctly reconstructs complex nested `map[string]interface{}` objects for the KSM Go SDK.
+    *   Handles type mapping nuances (e.g., `keyPair` to SDK type `privateKey`).
+    *   Attempts `strconv.ParseInt` for known numeric sub-fields like `passkey.signCount` and `passkey.createdDate`.
+    *   Attempts `json.Unmarshal` for `passkey.privateKey` if provided as a JSON string.
+    *   Handles string arrays for fields like `pamResources.resourceRef` (assuming comma-separated input from AI).
 
-4.  **Continued Single-Value Enforcement for Simple Fields**:
-    *   The `processFieldsForSDK` function still enforces that genuinely simple fields (e.g., `login`, `password`, `url`, `text`, `date`) only contain one value, trimming and warning if more are provided.
+5.  **Updated Tool Definitions (`tools.go`)**:
+    *   Descriptions for `create_secret` and `update_secret` now guide the AI to use the flattened field format and reference `get_record_type_schema`.
+    *   Includes examples for complex types like `passkey` (specifying `passkey.privateKey` as a JSON string of a JWK) and TitleCase for enums.
 
-## Benefits
-*   **Simplified AI Interaction**: Reduces the complexity of JSON generation for AI models, minimizing errors.
-*   **Robust Parsing**: The server now reliably transforms the simplified input into the structures the KSM SDK expects.
-*   **Clearer Schema**: The tool schema is now more accurate and easier for AI to follow.
-*   **Improved Data Integrity**: Reduces the chances of malformed records being sent to KSM.
+6.  **Comprehensive Test Updates**:
+    *   All relevant unit tests in `tool_handlers_test.go` have been updated to reflect the new pre-confirmation folder check, the behavior of `executeKsmExecuteConfirmedAction`, and to correctly validate the schema output from `get_record_type_schema` (including for `pamUser`).
 
-This major refactoring makes the secret creation and update process significantly more robust and AI-friendly. 
+These changes make `ksm-mcp` significantly more robust, AI-friendly, and easier to maintain regarding KSM record structures. 

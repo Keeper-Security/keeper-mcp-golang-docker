@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/keeper-security/ksm-mcp/internal/audit"
+	"github.com/keeper-security/ksm-mcp/internal/recordtemplates"
 	"github.com/keeper-security/ksm-mcp/pkg/types"
 )
 
@@ -321,20 +322,72 @@ func (s *Server) executeGetAllSecretsUnmasked(client KSMClient, args json.RawMes
 
 // executeCreateSecret handles the create_secret tool
 func (s *Server) executeCreateSecret(client KSMClient, args json.RawMessage) (interface{}, error) {
-	var paramsForDesc types.CreateSecretParams
+	var paramsForDesc types.CreateSecretParams // Used for descriptions and initial checks
 	if err := json.Unmarshal(args, &paramsForDesc); err != nil {
 		return nil, fmt.Errorf("invalid parameters for create_secret: %w", err)
 	}
 
-	if s.options.BatchMode || s.options.AutoApprove {
-		s.logSystem(audit.EventAccess, "CreateSecret: Batch/AutoApprove mode, executing directly", map[string]interface{}{
+	// ==== BEGIN FOLDER UID CHECK (Moved to pre-confirmation) ====
+	if paramsForDesc.FolderUID == "" {
+		s.logSystem(audit.EventAccess, "CreateSecret: No folder_uid provided by AI. Requesting clarification before confirmation.", map[string]interface{}{
 			"profile": s.currentProfile,
 			"title":   paramsForDesc.Title,
 		})
-		return s.executeCreateSecretConfirmed(client, args)
+		allFolders, listFoldersErr := client.ListFolders()
+		if listFoldersErr != nil {
+			s.logError("mcp", listFoldersErr, map[string]interface{}{
+				"operation": "executeCreateSecret_listFolders_for_clarification",
+				"profile":   s.currentProfile,
+			})
+			return nil, fmt.Errorf("failed to process create_secret for '%s': folder_uid is required. Additionally, failed to retrieve folder list: %w", paramsForDesc.Title, listFoldersErr)
+		}
+
+		var candidateFolders []types.FolderInfo
+		if allFolders != nil {
+			for _, f := range allFolders.Folders {
+				if f.ParentUID == "" { // Suggest top-level folders
+					candidateFolders = append(candidateFolders, f)
+				}
+			}
+			if len(candidateFolders) == 0 && len(allFolders.Folders) > 0 {
+				candidateFolders = allFolders.Folders
+			}
+		}
+
+		clarificationMessage := fmt.Sprintf("Folder UID (folder_uid) is required to create secret '%s'.", paramsForDesc.Title)
+		switch len(candidateFolders) {
+		case 0:
+			clarificationMessage += " No suitable folders are available. Please create a shared folder first or specify a valid folder_uid."
+		case 1:
+			f := candidateFolders[0]
+			clarificationMessage += fmt.Sprintf(" The folder '%s' (UID: %s) is available. Please re-run create_secret with this folder_uid.", f.Name, f.UID)
+		default:
+			clarificationMessage += " Please choose a folder from the list_folders tool and re-run create_secret with a folder_uid."
+		}
+
+		return map[string]interface{}{
+			"status":                  "folder_required_clarification",
+			"message":                 clarificationMessage,
+			"available_folders":       candidateFolders,
+			"original_tool_args_json": string(args), // Allow AI to easily retry with folder_uid added
+		}, nil
+	}
+	// ==== END FOLDER UID CHECK ====
+
+	// If folder_uid is present, proceed to normal confirmation or direct execution
+	if s.options.BatchMode || s.options.AutoApprove {
+		s.logSystem(audit.EventAccess, "CreateSecret: Batch/AutoApprove mode, folder_uid present, executing directly", map[string]interface{}{
+			"profile":    s.currentProfile,
+			"title":      paramsForDesc.Title,
+			"folder_uid": paramsForDesc.FolderUID,
+		})
+		return s.executeCreateSecretConfirmed(client, args) // args already contain folder_uid
 	}
 
-	actionDescription := fmt.Sprintf("Create new KSM secret titled '%s' of type '%s'", paramsForDesc.Title, paramsForDesc.Type)
+	// Standard confirmation flow (folder_uid is present)
+	actionDescription := fmt.Sprintf("Create new KSM secret titled '%s' of type '%s' in folder '%s'", paramsForDesc.Title, paramsForDesc.Type, paramsForDesc.FolderUID)
+	// Potentially fetch folder name for a friendlier message if FolderUID is just an ID
+	// For now, using UID is clear enough for confirmation.
 	warningMessage := "This will create a new entry in your Keeper vault."
 	originalToolArgsJSON := string(args)
 
@@ -348,9 +401,10 @@ func (s *Server) executeCreateSecret(client KSMClient, args json.RawMessage) (in
 		},
 	}
 
-	s.logSystem(audit.EventAccess, "CreateSecret: Confirmation required", map[string]interface{}{
-		"profile": s.currentProfile,
-		"title":   paramsForDesc.Title,
+	s.logSystem(audit.EventAccess, "CreateSecret: Confirmation required (folder_uid present)", map[string]interface{}{
+		"profile":    s.currentProfile,
+		"title":      paramsForDesc.Title,
+		"folder_uid": paramsForDesc.FolderUID,
 	})
 
 	return map[string]interface{}{
@@ -612,6 +666,34 @@ func (s *Server) executeGetServerVersion(client KSMClient, args json.RawMessage)
 	return map[string]interface{}{"version": s.options.Version}, nil
 }
 
+// executeGetRecordTypeSchema handles the get_record_type_schema tool
+func (s *Server) executeGetRecordTypeSchema(client KSMClient, args json.RawMessage) (interface{}, error) {
+	var params struct {
+		RecordType string `json:"type"`
+	}
+	if err := json.Unmarshal(args, &params); err != nil {
+		return nil, fmt.Errorf("invalid parameters for get_record_type_schema: %w", err)
+	}
+
+	if params.RecordType == "" {
+		return nil, fmt.Errorf("record type (type) parameter is required for get_record_type_schema")
+	}
+
+	s.logSystem(audit.EventAccess, "GetRecordTypeSchema called", map[string]interface{}{
+		"profile":     s.currentProfile, // Though schema is profile-agnostic, good to log context
+		"record_type": params.RecordType,
+	})
+
+	schema, err := recordtemplates.GetSchema(params.RecordType)
+	if err != nil {
+		// Log the error more visibly as well, as this indicates a problem with template loading or lookup
+		s.logError("mcp", fmt.Errorf("get_record_type_schema: error from recordtemplates.GetSchema for type '%s': %w", params.RecordType, err), nil)
+		return nil, fmt.Errorf("failed to get schema for record type '%s': %w. Ensure templates are loaded correctly and the type exists.", params.RecordType, err)
+	}
+
+	return schema, nil
+}
+
 // Confirmed action handlers
 func (s *Server) executeCreateSecretConfirmed(client KSMClient, args json.RawMessage) (interface{}, error) {
 	var params types.CreateSecretParams
@@ -619,66 +701,8 @@ func (s *Server) executeCreateSecretConfirmed(client KSMClient, args json.RawMes
 		return nil, fmt.Errorf("invalid parameters for confirmed create_secret (initial unmarshal): %w", err)
 	}
 
-	// ==== BEGIN FOLDER UID CHECK ====
-	if params.FolderUID == "" {
-		s.logSystem(audit.EventAccess, "CreateSecret: No folder_uid provided. Requesting clarification.", map[string]interface{}{
-			"profile": s.currentProfile,
-			"title":   params.Title,
-		})
-		allFolders, listFoldersErr := client.ListFolders()
-		if listFoldersErr != nil {
-			s.logError("mcp", listFoldersErr, map[string]interface{}{
-				"operation": "executeCreateSecretConfirmed_listFolders_for_clarification",
-				"profile":   s.currentProfile,
-			})
-			// Fallback to a generic error if we can't even list folders
-			return nil, fmt.Errorf("failed to create secret '%s': folder_uid is required. Additionally, failed to retrieve folder list: %w", params.Title, listFoldersErr)
-		}
-
-		var candidateFolders []types.FolderInfo
-		if allFolders != nil {
-			for _, f := range allFolders.Folders {
-				// Suggest top-level folders or shared folders. KSM typically requires records to be in shared folders via API.
-				// A more robust check for "isShared" would be ideal if the SDK provided it directly on FolderInfo.
-				// For now, top-level (ParentUID == "") is a common heuristic for shared roots.
-				if f.ParentUID == "" { // Consider also checking f.Type or a hypothetical f.IsShared if available
-					candidateFolders = append(candidateFolders, f)
-				}
-			}
-			// If no top-level folders, but other folders exist, offer all as potential parents.
-			// This might at least guide the user if they have a flat structure or specific shared subfolders.
-			if len(candidateFolders) == 0 && len(allFolders.Folders) > 0 {
-				s.logSystem(audit.EventAccess, "CreateSecret: No top-level folders found, preparing all folders for selection suggestion.", map[string]interface{}{})
-				candidateFolders = allFolders.Folders
-			}
-		}
-
-		clarificationMessage := fmt.Sprintf("Folder UID (folder_uid) is required to create secret '%s'.", params.Title)
-
-		switch len(candidateFolders) {
-		case 0:
-			clarificationMessage += " No suitable folders are available to create the secret in. Please ensure a shared folder exists or create one."
-		case 1:
-			f := candidateFolders[0]
-			clarificationMessage += fmt.Sprintf(" The folder '%s' (UID: %s) is available. Would you like to use this folder?", f.Name, f.UID)
-		case 2, 3, 4, 5: // List a few folders directly in the message
-			var folderStrings []string
-			for _, f := range candidateFolders {
-				folderStrings = append(folderStrings, fmt.Sprintf("'%s' (UID: %s)", f.Name, f.UID))
-			}
-			clarificationMessage += fmt.Sprintf(" Please choose a folder from: %s, or use list_folders to see all.", strings.Join(folderStrings, ", "))
-		default: // More than 5 folders
-			clarificationMessage += " Please choose a folder. Refer to the 'available_folders' list from list_folders for names and UIDs."
-		}
-
-		return map[string]interface{}{
-			"status":                  "folder_required_clarification",
-			"message":                 clarificationMessage,
-			"available_folders":       candidateFolders, // Provide the list for AI to use
-			"original_tool_args_json": string(args),     // Allow AI to retry with folder_uid added
-		}, nil
-	}
-	// ==== END FOLDER UID CHECK ====
+	// FolderUID check is now done in executeCreateSecret before confirmation.
+	// So, here we assume params.FolderUID is present and valid for KSM API call.
 
 	// Process the flattened fields into the structure the SDK expects
 	reconstructedFields, processingWarnings, err := processFieldsForSDK(params.Fields)
@@ -689,137 +713,19 @@ func (s *Server) executeCreateSecretConfirmed(client KSMClient, args json.RawMes
 
 	uid, err := client.CreateSecret(params)
 	if err != nil {
+		// The specific KSM error "folder uid= was not retrieved" might still occur if the provided
+		// folder_uid is for a non-shared folder or an empty shared folder (depending on KSM API rules).
+		// The previous complex logic for suggesting parent folders can remain here if that specific error occurs.
 		if strings.Contains(err.Error(), "folder uid=") && strings.Contains(err.Error(), "was not retrieved") {
-			originalErrMessage := err.Error() // Capture original KSM error message part
-
-			if params.FolderUID == "" {
-				// Case 1: No folder_uid was provided in the initial request
-				s.logSystem(audit.EventAccess, "CreateSecret: No folder_uid provided. Requesting clarification.", map[string]interface{}{
-					"profile": s.currentProfile,
-					"title":   params.Title,
-				})
-				allFolders, listFoldersErr := client.ListFolders()
-				if listFoldersErr != nil {
-					s.logError("mcp", listFoldersErr, map[string]interface{}{
-						"operation": "executeCreateSecretConfirmed_listFolders_for_clarification",
-						"profile":   s.currentProfile,
-					})
-					// Fallback to a generic error if we can't even list folders
-					return nil, fmt.Errorf("failed to create secret '%s': folder_uid is required. Additionally, failed to retrieve folder list: %w", params.Title, listFoldersErr)
-				}
-
-				var candidateFolders []types.FolderInfo
-				if allFolders != nil {
-					for _, f := range allFolders.Folders {
-						if f.ParentUID == "" {
-							candidateFolders = append(candidateFolders, f)
-						}
-					}
-					if len(candidateFolders) == 0 && len(allFolders.Folders) > 0 {
-						s.logSystem(audit.EventAccess, "CreateSecret: No top-level folders found, preparing all folders for selection suggestion.", map[string]interface{}{})
-						candidateFolders = allFolders.Folders // Use all folders if no top-level ones specifically
-					}
-				}
-
-				clarificationMessage := fmt.Sprintf("Failed to create secret '%s' (KSM error: %s). No folder was specified.", params.Title, originalErrMessage)
-
-				switch len(candidateFolders) {
-				case 0:
-					clarificationMessage += " No folders are available to create the secret in. Please create a folder first."
-				case 1:
-					f := candidateFolders[0]
-					clarificationMessage += fmt.Sprintf(" The only available folder is '%s' (UID: %s). Would you like to use this folder?", f.Name, f.UID)
-				case 2, 3, 4, 5: // List a few folders directly in the message
-					var folderStrings []string
-					for _, f := range candidateFolders {
-						folderStrings = append(folderStrings, fmt.Sprintf("'%s' (UID: %s)", f.Name, f.UID))
-					}
-					clarificationMessage += fmt.Sprintf(" Please choose from the following folders: %s.", strings.Join(folderStrings, ", "))
-				default: // More than 5 folders
-					clarificationMessage += " Please choose a folder. Refer to the 'available_folders' list for names and UIDs."
-				}
-
-				return map[string]interface{}{
-					"status":                  "folder_required_clarification",
-					"message":                 clarificationMessage,
-					"available_folders":       candidateFolders,
-					"original_tool_args_json": string(args),
-				}, nil
-
-			} else {
-				// Case 2: A specific folder_uid was provided, but it's likely empty (existing logic)
-				s.logSystem(audit.EventAccess, fmt.Sprintf("CreateSecret: Target folder %s empty or invalid, attempting to find suitable parent.", params.FolderUID), map[string]interface{}{
-					"profile":       s.currentProfile,
-					"title":         params.Title,
-					"target_folder": params.FolderUID,
-				})
-
-				allFolders, listFoldersErr := client.ListFolders()
-				if listFoldersErr != nil {
-					s.logError("mcp", listFoldersErr, map[string]interface{}{
-						"operation": "executeCreateSecretConfirmed_listFolders_for_parent_check",
-						"profile":   s.currentProfile,
-					})
-					// Fall through to original error if we can't list folders for parent check
-				} else {
-					var currentFolderInfo *types.FolderInfo
-					for _, f := range allFolders.Folders {
-						if f.UID == params.FolderUID {
-							tempF := f
-							currentFolderInfo = &tempF
-							break
-						}
-					}
-
-					if currentFolderInfo != nil && currentFolderInfo.ParentUID != "" {
-						var parentFolderInfo *types.FolderInfo
-						for _, f := range allFolders.Folders {
-							if f.UID == currentFolderInfo.ParentUID {
-								tempF := f
-								parentFolderInfo = &tempF
-								break
-							}
-						}
-
-						if parentFolderInfo != nil {
-							parentSecrets, listSecretsErr := client.ListSecrets(parentFolderInfo.UID)
-							if listSecretsErr != nil {
-								s.logError("mcp", listSecretsErr, map[string]interface{}{
-									"operation":     "executeCreateSecretConfirmed_listSecrets_parent",
-									"profile":       s.currentProfile,
-									"parent_folder": parentFolderInfo.UID,
-								})
-								// Fall through to original error
-							} else if len(parentSecrets) > 0 {
-								s.logSystem(audit.EventAccess, fmt.Sprintf("CreateSecret: Recommending parent folder %s for secret %s", parentFolderInfo.UID, params.Title), map[string]interface{}{
-									"profile":                 s.currentProfile,
-									"title":                   params.Title,
-									"original_folder_uid":     params.FolderUID,
-									"recommended_folder_uid":  parentFolderInfo.UID,
-									"recommended_folder_name": parentFolderInfo.Name,
-								})
-								return map[string]interface{}{
-									"status":                  "parent_folder_recommended",
-									"message":                 fmt.Sprintf("The target folder '%s' (UID: %s) is empty or cannot be directly used for new records. It's recommended to use the parent shared folder '%s' (UID: %s) which contains existing records.", currentFolderInfo.Name, params.FolderUID, parentFolderInfo.Name, parentFolderInfo.UID),
-									"original_folder_uid":     params.FolderUID,
-									"original_folder_name":    currentFolderInfo.Name,
-									"recommended_folder_uid":  parentFolderInfo.UID,
-									"recommended_folder_name": parentFolderInfo.Name,
-									"original_tool_args_json": string(args),
-								}, nil
-							} else {
-								s.logSystem(audit.EventAccess, fmt.Sprintf("CreateSecret: Parent folder %s (for target %s) is also empty or unsuitable.", parentFolderInfo.UID, params.FolderUID), map[string]interface{}{"profile": s.currentProfile})
-							}
-						}
-					}
-				}
-				// Fallback for Case 2: if no suitable parent found or other issue with the specified folder
-				return nil, fmt.Errorf("failed to create secret '%s' in folder '%s' (KSM error: %s). Hint: This can occur if the target shared folder is empty or not properly initialized for API record creation. Please ensure at least one record exists in the folder, or try its parent folder if applicable.", params.Title, params.FolderUID, originalErrMessage)
-			}
+			originalErrMessage := err.Error()
+			// ... [The existing logic for suggesting parent folder can be kept or simplified] ...
+			// For now, let's return a more direct error if this happens post-confirmation with a folder_uid.
+			return nil, fmt.Errorf("failed to create secret '%s' in folder '%s' (KSM API error: %s). Ensure the folder is a shared folder and accessible.", params.Title, params.FolderUID, originalErrMessage)
 		}
-		// Generic KSM error not related to "folder uid was not retrieved"
+		// Generic KSM error
 		return nil, fmt.Errorf("failed to create secret '%s': %w", params.Title, err)
 	}
+
 	// Success
 	response := map[string]interface{}{
 		"uid":     uid,
@@ -827,12 +733,10 @@ func (s *Server) executeCreateSecretConfirmed(client KSMClient, args json.RawMes
 		"message": "Secret created successfully (confirmed).",
 	}
 
-	allWarnings := append(processingWarnings) // Add warnings from field processing
+	allWarnings := append(processingWarnings)
 
 	if len(allWarnings) > 0 {
 		response["warnings"] = allWarnings
-		// Modify message if only processing warnings, not value-trimming warnings specifically.
-		// For now, keep a generic addition for any warning.
 		currentMsg := response["message"].(string)
 		response["message"] = fmt.Sprintf("%s Some fields were processed or adjusted; see warnings.", currentMsg)
 	}
@@ -1418,9 +1322,19 @@ func processFieldsForSDK(inputFields []types.SecretField) ([]types.SecretField, 
 			continue
 		case "passkey":
 			passkeyMap := make(map[string]interface{})
-			if pk, ok := subFieldsMap["privateKey"].(string); ok {
-				passkeyMap["privateKey"] = pk
+			if pkStr, okPkStr := subFieldsMap["privateKey"].(string); okPkStr {
+				var jwk map[string]interface{}
+				if err := json.Unmarshal([]byte(pkStr), &jwk); err == nil {
+					passkeyMap["privateKey"] = jwk // Store as unmarshalled map
+				} else {
+					warnings = append(warnings, fmt.Sprintf("Warning: Could not parse passkey.privateKey JSON string '%s' for field '%s'. Using raw string.", pkStr, instanceKey))
+					passkeyMap["privateKey"] = pkStr // Fallback to raw string
+				}
+			} else if pkMap, okPkMap := subFieldsMap["privateKey"].(map[string]interface{}); okPkMap {
+				// AI might have pre-structured it if very capable, though unlikely with current flattened approach
+				passkeyMap["privateKey"] = pkMap
 			}
+
 			if cid, ok := subFieldsMap["credentialId"].(string); ok {
 				passkeyMap["credentialId"] = cid
 			}

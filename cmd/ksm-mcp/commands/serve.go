@@ -14,6 +14,7 @@ import (
 	"github.com/keeper-security/ksm-mcp/internal/config"
 	"github.com/keeper-security/ksm-mcp/internal/ksm"
 	"github.com/keeper-security/ksm-mcp/internal/mcp"
+	"github.com/keeper-security/ksm-mcp/internal/recordtemplates"
 	"github.com/keeper-security/ksm-mcp/internal/storage"
 	"github.com/keeper-security/ksm-mcp/pkg/types"
 	"github.com/spf13/cobra"
@@ -75,6 +76,19 @@ func init() {
 }
 
 func runServe(cmd *cobra.Command, args []string) error {
+	// Load record templates from embedded files
+	if err := recordtemplates.LoadRecordTemplates(); err != nil {
+		// Make template loading errors fatal during development and for stability
+		return fmt.Errorf("CRITICAL: failed to load embedded record templates: %w. Server cannot continue without templates.", err)
+	}
+	if parseErrs := recordtemplates.GetParseErrors(); len(parseErrs) > 0 {
+		fmt.Fprintf(os.Stderr, "CRITICAL: encountered %d errors during record template parsing:\n", len(parseErrs))
+		for i, pErr := range parseErrs {
+			fmt.Fprintf(os.Stderr, "  %d: %s\n", i+1, pErr)
+		}
+		return fmt.Errorf("CRITICAL: %d errors parsing record templates. Server cannot continue.", len(parseErrs))
+	}
+
 	var envVarProfile *types.Profile
 	var finalProfileToUse *types.Profile
 	var store storage.ProfileStoreInterface

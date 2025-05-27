@@ -66,3 +66,4 @@ profiles/
 *.key
 *.pem
 ksm-mcp*
+gosec-results.sarif
