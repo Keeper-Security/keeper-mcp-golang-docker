@@ -98,6 +98,11 @@ func (m *mockKSMClient) CreateFolder(name string, parentUID string) (string, err
 	return args.String(0), args.Error(1)
 }
 
+func (m *mockKSMClient) DeleteFolder(uid string, force bool) error {
+	args := m.Called(uid, force)
+	return args.Error(0)
+}
+
 func (m *mockKSMClient) TestConnection() error {
 	args := m.Called()
 	return args.Error(0)

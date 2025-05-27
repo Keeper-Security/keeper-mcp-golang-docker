@@ -24,6 +24,14 @@ SRC_DIR=./cmd/$(BINARY_NAME)
 INTERNAL_DIR=./internal/...
 PKG_DIR=./pkg/...
 
+GOLANGCILINT_CMD := $(shell go env GOBIN)/golangci-lint
+ifeq ($(GOLANGCILINT_CMD), /golangci-lint) # GOBIN not set or empty
+  GOLANGCILINT_CMD := $(shell go env GOPATH)/bin/golangci-lint
+  ifeq ($(GOLANGCILINT_CMD), /bin/golangci-lint) # GOPATH not set or empty
+    GOLANGCILINT_CMD := $(HOME)/go/bin/golangci-lint
+  endif
+endif
+
 .PHONY: all build clean test test-coverage test-race lint fmt deps docker-build docker-run help
 
 ## Default target
@@ -83,7 +91,7 @@ test-integration:
 lint:
 	@echo "Running linter..."
 	@which golangci-lint > /dev/null || (echo "Installing golangci-lint..." && go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest)
-	golangci-lint run
+	$(GOLANGCILINT_CMD) run
 
 ## Format code
 fmt:
