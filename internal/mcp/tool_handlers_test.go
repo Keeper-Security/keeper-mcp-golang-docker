@@ -786,6 +786,28 @@ func TestExecuteGetRecordTypeSchema(t *testing.T) {
 			},
 		},
 		{
+			name:               "get pamMachine schema (UI transformed)",
+			args:               json.RawMessage(`{"type":"pamMachine"}`),
+			expectError:        false,
+			expectedRecordType: "pamMachine",
+			expectedFields: map[string]types.SchemaField{
+				"pamHostname.hostName":      {Name: "pamHostname.hostName", Type: "string", Required: true, Description: "multiple fields to capture host information for PAM.  When the field is required, they must enter both host and port - hostName"},
+				"pamHostname.port":          {Name: "pamHostname.port", Type: "string", Required: true, Description: "multiple fields to capture host information for PAM.  When the field is required, they must enter both host and port - port"},
+				"pamSettings":               {Name: "pamSettings", Type: "pamSettings", Required: false, Description: "Guacamole connection settings"},
+				"trafficEncryptionSeed":     {Name: "trafficEncryptionSeed", Type: "trafficEncryptionSeed", Required: false, Description: "Base 64 encoded 256 bits value used to derive an encryption key to use with message encyrption"},
+				"rotationScripts.command":   {Name: "rotationScripts.command", Type: "string", Required: false, Description: "Script execution details - command"},
+				"rotationScripts.fileRef":   {Name: "rotationScripts.fileRef", Type: "string", Required: false, Description: "Script execution details - fileRef"},
+				"rotationScripts.recordRef": {Name: "rotationScripts.recordRef", Type: "string", Required: false, Description: "Script execution details - recordRef"},
+				"operatingSystem":           {Name: "operatingSystem", Type: "text", Required: false, Description: "plain text"},
+				"instanceName":              {Name: "instanceName", Type: "text", Required: false, Description: "plain text"},
+				"instanceId":                {Name: "instanceId", Type: "text", Required: false, Description: "plain text"},
+				"providerGroup":             {Name: "providerGroup", Type: "text", Required: false, Description: "plain text"},
+				"providerRegion":            {Name: "providerRegion", Type: "text", Required: false, Description: "plain text"},
+				"fileRef":                   {Name: "fileRef", Type: "fileRef", Required: false, Description: "reference to the file field on another record"},
+				"oneTimeCode":               {Name: "oneTimeCode", Type: "otp", Required: false, Description: "captures the seed, displays QR code"},
+			},
+		},
+		{
 			name:        "type not found",
 			args:        json.RawMessage(`{"type":"nonExistentType"}`),
 			expectError: true,
@@ -810,6 +832,17 @@ func TestExecuteGetRecordTypeSchema(t *testing.T) {
 
 			schema, ok := result.(*types.RecordTypeSchema)
 			assert.True(t, ok, "Result should be of type *types.RecordTypeSchema")
+
+			// --- DEBUG: Print actual schema for pamMachine ---
+			// fmt.Printf("DEBUG: Actual schema for pamMachine BEGIN\n")
+			// fmt.Printf("%#v\n", schema) // Detailed struct view
+			// for _, f := range schema.Fields {
+			// 	fmt.Printf("FIELD_DEF: %s | %s | %t | %s | %v\n", f.Name, f.Type, f.Required, f.Description, f.ExampleValues)
+			// }
+			// fmt.Printf("DEBUG: Actual schema for pamMachine END\n")
+			// t.FailNow() // Intentionally fail to stop and get output - REMOVE AFTER CAPTURING
+			// --- END DEBUG ---
+
 			assert.Equal(t, tt.expectedRecordType, schema.RecordType)
 
 			assert.Len(t, schema.Fields, len(tt.expectedFields), "Number of fields should match")

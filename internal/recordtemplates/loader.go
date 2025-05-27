@@ -116,118 +116,201 @@ func LoadRecordTemplates() error {
 	return nil
 }
 
-// GetSchema retrieves the processed schema for a given record type ID.
+// GetSchema retrieves the processed schema for a given record type ID,
+// applying UI-specific transformations.
 func GetSchema(recordTypeID string) (*types.RecordTypeSchema, error) {
 	if loadedTemplates == nil || loadedFields == nil || loadedFieldTypes == nil {
 		return nil, fmt.Errorf("record templates not loaded. Call LoadRecordTemplates first")
 	}
 
+	canonicalID := recordTypeID
 	template, ok := loadedTemplates[recordTypeID]
 	if !ok {
-		// Attempt to find a template that might match by case-insensitive comparison or common aliases
+		foundMatch := false
 		for id, t := range loadedTemplates {
 			if strings.EqualFold(id, recordTypeID) || strings.EqualFold(strings.ReplaceAll(id, "_", ""), recordTypeID) {
 				template = t
-				ok = true
-				recordTypeID = id // Use the canonical ID
+				canonicalID = id // Use the canonical ID from the loaded templates
+				foundMatch = true
 				break
 			}
 		}
-		if !ok {
+		if !foundMatch {
 			return nil, fmt.Errorf("record template not found for ID: %s", recordTypeID)
 		}
 	}
 
 	schema := &types.RecordTypeSchema{
-		RecordType:  template.ID,
+		RecordType:  canonicalID, // Use the ID found in the map key
 		Description: template.Description,
 		Fields:      make([]types.SchemaField, 0),
 		Notes:       "Fields should be provided in a flattened format (e.g., 'bankAccount.accountType'). All 'value' properties must be single-element string arrays.",
 	}
 
-	// Process standard fields
+	// Process standard fields first
 	for _, tplField := range template.Fields {
-		appendSchemaFields(tplField, &schema.Fields, false)
+		appendSchemaFields(tplField, &schema.Fields, false, canonicalID)
 	}
-	// Process custom fields (often not predefined with sub-elements in the same way, treat as simple for now)
-	// Or, if custom fields can also be complex based on their type, this needs more sophisticated handling.
+	// Process custom fields
 	for _, tplField := range template.Custom {
-		appendSchemaFields(tplField, &schema.Fields, true)
+		appendSchemaFields(tplField, &schema.Fields, true, canonicalID)
 	}
+
+	// Apply UI-specific transformations that mimic client-side processing
+	applyUITransformations(canonicalID, schema)
 
 	return schema, nil
 }
 
 // appendSchemaFields is a helper to recursively build the schema fields.
-func appendSchemaFields(tplField types.RecordTemplateField, schemaFields *[]types.SchemaField, isCustom bool) {
-	fmt.Fprintf(os.Stderr, "DEBUG: Processing tplField with Ref: %s, Label: %s\n", tplField.Ref, tplField.Label) // DEBUG
+// It now takes recordTypeID to help with context-specific decisions if needed.
+func appendSchemaFields(tplField types.RecordTemplateField, schemaFields *[]types.SchemaField, isCustom bool, recordTypeID string) {
+	fmt.Fprintf(os.Stderr, "DEBUG: appendSchemaFields for %s - Ref: %s, Label: %s\n", recordTypeID, tplField.Ref, tplField.Label)
 
 	basicField, bfOk := loadedFields[tplField.Ref]
 	if !bfOk {
-		templateParseErrors = append(templateParseErrors, fmt.Sprintf("Referenced field $%s not found in fields.json for template field label '%s'", tplField.Ref, tplField.Label))
-		fmt.Fprintf(os.Stderr, "DEBUG: basicField NOT FOUND for Ref: %s\n", tplField.Ref) // DEBUG
+		templateParseErrors = append(templateParseErrors, fmt.Sprintf("[%s] Referenced field $%s not found in fields.json for template field label '%s'", recordTypeID, tplField.Ref, tplField.Label))
 		*schemaFields = append(*schemaFields, types.SchemaField{
 			Name:        tplField.Label,
-			Description: "Error: Referenced field definition not found",
+			Description: "Error: Referenced field definition ($ref) not found in fields.json",
 			Type:        "unknown",
 			Required:    tplField.Required,
 		})
 		return
 	}
-	fmt.Fprintf(os.Stderr, "DEBUG: Found basicField for Ref: %s, BasicField Type: %s\n", tplField.Ref, basicField.Type) // DEBUG
 
 	fieldTypeDefinition, ftdOk := loadedFieldTypes[basicField.Type]
 	if !ftdOk {
-		templateParseErrors = append(templateParseErrors, fmt.Sprintf("Field type definition '%s' not found in field-types.json for field $%s", basicField.Type, tplField.Ref))
-		fmt.Fprintf(os.Stderr, "DEBUG: fieldTypeDefinition NOT FOUND for Type: %s (Ref: %s)\n", basicField.Type, tplField.Ref) // DEBUG
+		templateParseErrors = append(templateParseErrors, fmt.Sprintf("[%s] Field type definition '%s' (from $ref: %s) not found in field-types.json", recordTypeID, basicField.Type, tplField.Ref))
 		*schemaFields = append(*schemaFields, types.SchemaField{
 			Name:        tplField.Label,
-			Description: fmt.Sprintf("Field type '%s' (Error: definition not found)", basicField.Type),
+			Description: fmt.Sprintf("Field type '%s' (Error: Type definition not found in field-types.json)", basicField.Type),
 			Type:        basicField.Type,
 			Required:    tplField.Required,
 		})
 		return
 	}
-	fmt.Fprintf(os.Stderr, "DEBUG: Found fieldTypeDefinition for Type: %s, Elements: %v\n", basicField.Type, fieldTypeDefinition.Elements) // DEBUG
 
-	fieldLabel := tplField.Label
-	if fieldLabel == "" {
-		fieldLabel = basicField.ID
+	fieldLabelToUse := tplField.Label
+	if fieldLabelToUse == "" {
+		fieldLabelToUse = basicField.ID
 	}
 	finalNamePrefix := ""
 	if isCustom {
 		finalNamePrefix = "custom."
 	}
 
-	if len(fieldTypeDefinition.Elements) > 0 { // Complex type with sub-fields
+	if len(fieldTypeDefinition.Elements) > 0 {
 		for _, elementName := range fieldTypeDefinition.Elements {
 			sf := types.SchemaField{
-				Name:        finalNamePrefix + fieldLabel + "." + elementName,
+				Name:        finalNamePrefix + fieldLabelToUse + "." + elementName,
 				Description: fmt.Sprintf("%s - %s", fieldTypeDefinition.Description, elementName),
-				Type:        "string",          // Sub-elements are treated as string inputs in flattened form
-				Required:    tplField.Required, // Base field's required status for now
+				Type:        "string",
+				Required:    tplField.Required,
 			}
-			addExampleValuesToSubField(&sf, basicField.Type, elementName) // basicField.Type is like "phone", "bankAccount"
+			addExampleValuesToSubField(&sf, basicField.Type, elementName)
 			*schemaFields = append(*schemaFields, sf)
 		}
-	} else { // Simple field
+	} else {
 		sf := types.SchemaField{
-			Name:        finalNamePrefix + fieldLabel,
+			Name:        finalNamePrefix + fieldLabelToUse,
 			Description: fieldTypeDefinition.Description,
 			Type:        basicField.Type,
 			Required:    tplField.Required,
 		}
-		// Add example values for known enum-like simple fields based on their main type ID
-		switch basicField.Type { // This refers to the $id from field-types.json, e.g., "phoneType", "accountType"
-		// Case for a simple field that is an enum (e.g. if 'databaseType' was simple and not part of a complex field definition)
-		// For example, if field-types.json had { "$id": "phoneType", "description": "Type of phone" ... }
-		// and fields.json had { "$id": "mobilePhoneType", "type": "phoneType" }
-		// and a template used { "$ref": "mobilePhoneType", "label": "Mobile Type" }
-		// Then basicField.Type would be "phoneType"
-		// This section is more for simple fields that are inherently enums.
-		// Most enums we care about are sub-fields of complex types, handled by addExampleValuesToSubField.
-		}
+		addExampleValuesToSimpleField(&sf, basicField.Type)
 		*schemaFields = append(*schemaFields, sf)
+	}
+}
+
+// addExampleValuesToSimpleField adds example values for simple enum-like fields
+func addExampleValuesToSimpleField(schemaField *types.SchemaField, fieldTypeID string) {
+	// This is for simple fields that are enums directly, not sub-fields of complex types
+	// Example: if 'databaseType' was a simple field itself.
+	switch fieldTypeID {
+	case "databaseType":
+		schemaField.ExampleValues = []string{"PostgreSQL", "MySQL", "MariaDB", "MSSQL", "Oracle", "MongoDB"} // From vault's DatabaseType enum
+		schemaField.Description += " (e.g., PostgreSQL, MySQL)"
+	case "directoryType":
+		schemaField.ExampleValues = []string{"Active Directory", "OpenLDAP"} // From vault's DirectoryType enum
+		schemaField.Description += " (e.g., Active Directory)"
+		// Add more simple enum field types here if needed
+	}
+}
+
+func applyUITransformations(recordTypeID string, schema *types.RecordTypeSchema) {
+	// Mimic logic from vault client's processGetRecordTypesResponse
+	// This function modifies schema.Fields in place
+
+	// The logic for adding pamSettings and trafficEncryptionSeed based on hasPamHostname
+	// was commented out because the pamMachine.json template now directly includes $refs for these.
+	// If that changes, or if other PAM types need this dynamic addition, that logic can be reinstated.
+	// For now, ensure hasPamHostname and pamHostnameIndex are not declared if not used.
+	// For example, if we needed to find the insertion point:
+	// pamHostnameIndex := -1
+	// for i, f := range schema.Fields {
+	// 	if strings.HasPrefix(f.Name, "pamHostname.") {
+	// 		if i > pamHostnameIndex {
+	// 			pamHostnameIndex = i
+	// 		}
+	// 	}
+	// }
+
+	// Remove fields for certain PAM types
+	fieldsToRemove := make(map[string]bool)
+	if recordTypeID != "pamRemoteBrowser" && recordTypeID != "pamUser" { // This condition applied to login/password removal in UI code
+		// For pamMachine specifically, UI code removes login, password, and privatePEMKey (if it was defined via a secret ref with that label)
+		if recordTypeID == "pamMachine" {
+			fieldsToRemove["login"] = true         // Base field name
+			fieldsToRemove["password"] = true      // Base field name
+			fieldsToRemove["privatePEMKey"] = true // Label used in pamUser, check pamMachine template for actual SSH key field
+		}
+		if recordTypeID == "pamDirectory" {
+			fieldsToRemove["distinguishedName"] = true
+		}
+		if recordTypeID == "pamDatabase" {
+			fieldsToRemove["connectDatabase"] = true
+		}
+	}
+
+	if len(fieldsToRemove) > 0 {
+		updatedFields := make([]types.SchemaField, 0)
+		for _, field := range schema.Fields {
+			// Check against the base name if it's a flattened field
+			baseName := strings.Split(field.Name, ".")[0]
+			if !fieldsToRemove[field.Name] && !fieldsToRemove[baseName] {
+				updatedFields = append(updatedFields, field)
+			}
+		}
+		schema.Fields = updatedFields
+	}
+
+	// Specific handling for pamRemoteBrowser - ensure it has rbiUrl, pamRemoteBrowserSettings, trafficEncryptionSeed
+	if recordTypeID == "pamRemoteBrowser" {
+		desiredFields := map[string]bool{"rbiUrl": false, "pamRemoteBrowserSettings": false, "trafficEncryptionSeed": false}
+		currentFields := make([]types.SchemaField, 0)
+		for _, field := range schema.Fields {
+			baseName := strings.Split(field.Name, ".")[0] // Get base name for complex types
+			if _, ok := desiredFields[baseName]; ok {
+				currentFields = append(currentFields, field)
+				desiredFields[baseName] = true
+			} else if _, okSingle := desiredFields[field.Name]; okSingle { // For simple fields
+				currentFields = append(currentFields, field)
+				desiredFields[field.Name] = true
+			}
+		}
+		schema.Fields = currentFields
+
+		// Add missing desired fields
+		for fName, found := range desiredFields {
+			if !found {
+				// This requires knowing the $ref for these fields to call appendSchemaFields correctly
+				// e.g., if "rbiUrl" $ref is "rbiUrlField" in fields.json
+				// This part is tricky without knowing the exact $ref for these specific fields.
+				// For now, we'll log a warning if a hardcoded desired field is missing.
+				templateParseErrors = append(templateParseErrors, fmt.Sprintf("Warning: For pamRemoteBrowser, desired field '%s' was not found in base template and was not dynamically added due to missing $ref info.", fName))
+			}
+		}
 	}
 }
 

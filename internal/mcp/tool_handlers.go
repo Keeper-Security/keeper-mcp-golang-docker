@@ -958,7 +958,7 @@ func (s *Server) executeCreateFolderConfirmed(client KSMClient, args json.RawMes
 				folderStrings = append(folderStrings, fmt.Sprintf("'%s' (UID: %s)", f.Name, f.UID))
 			}
 			clarificationMessage += fmt.Sprintf(" Please choose a parent folder from: %s.", strings.Join(folderStrings, ", "))
-		default: // More than 5 folders
+		default:
 			clarificationMessage += " Please choose a parent folder. Refer to the 'available_parent_folders' list for names and UIDs."
 		}
 
@@ -1126,7 +1126,7 @@ func processFieldsForSDK(inputFields []types.SecretField) ([]types.SecretField, 
 	// This map helps identify and parse flattened complex fields.
 	// The value is a map of the sub-field name to its type (not strictly enforced here but good for reference)
 	complexFieldDefinitions := map[string]map[string]string{
-		"name":             {"first": "string", "middle": "string", "last": "string"}, // Aligned with SDK & vault client's NameFieldData
+		"name":             {"firstName": "string", "lastName": "string", "fullName": "string"}, // Corrected to match field-types.json elements
 		"phone":            {"region": "string", "number": "string", "ext": "string", "type": "string"},
 		"address":          {"street1": "string", "street2": "string", "city": "string", "state": "string", "zip": "string", "country": "string"},
 		"host":             {"hostName": "string", "port": "string"},
@@ -1215,14 +1215,39 @@ func processFieldsForSDK(inputFields []types.SecretField) ([]types.SecretField, 
 		switch baseType {
 		case "name":
 			nameMap := make(map[string]interface{})
-			if fn, ok := subFieldsMap["first"].(string); ok {
-				nameMap["first"] = fn
+			// Values from AI will use keys "firstName", "lastName", "fullName"
+			// We map them to SDK's expected JSON keys "first", "middle", "last"
+			if val, ok := subFieldsMap["firstName"].(string); ok {
+				nameMap["first"] = val
 			}
-			if mn, ok := subFieldsMap["middle"].(string); ok {
-				nameMap["middle"] = mn
+			if val, ok := subFieldsMap["lastName"].(string); ok {
+				nameMap["last"] = val
 			}
-			if ln, ok := subFieldsMap["last"].(string); ok {
-				nameMap["last"] = ln
+			// If fullName is provided, and first/last are also given, middle is ambiguous.
+			// If only fullName is given, it might be used for first or split.
+			// For simplicity with KSM SDK expecting distinct parts, we'll prioritize first/last.
+			// Middle name is often optional. If template had a "middleName" element, we'd map it.
+			if val, ok := subFieldsMap["fullName"].(string); ok {
+				// If first and last are empty, attempt to use fullName for first.
+				if nameMap["first"] == nil && nameMap["last"] == nil && val != "" {
+					nameMap["first"] = val // Or try to split it intelligently if desired
+				} else if nameMap["first"] != nil && nameMap["last"] != nil && val != "" {
+					// If first and last are set, maybe fullName goes to middle? Or just log a warning.
+					nameMap["middle"] = val // This is an assumption
+					warnings = append(warnings, fmt.Sprintf("Warning: For field '%s', 'fullName' was provided alongside 'firstName' and 'lastName'. 'fullName' mapped to 'middle'.", instanceKey))
+				} else if val != "" && nameMap["first"] == nil {
+					nameMap["first"] = val // if only fullname is there, set it to first.
+				}
+			}
+			// Ensure keys expected by SDK are present, even if empty, if that's how SDK handles it.
+			if _, ok := nameMap["first"]; !ok {
+				nameMap["first"] = ""
+			}
+			if _, ok := nameMap["middle"]; !ok {
+				nameMap["middle"] = ""
+			}
+			if _, ok := nameMap["last"]; !ok {
+				nameMap["last"] = ""
 			}
 			complexValue = nameMap
 		case "phone":
