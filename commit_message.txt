@@ -1,40 +1,39 @@
-feat: Add validation for single-value fields and improve field type guidance
+feat: Implement flattened field input for complex types and robust server-side parsing
 
-BREAKING CHANGE: The MCP server now enforces single values for simple fields and will automatically trim multiple values to the first one.
+BREAKING CHANGE: The 'create_secret' and 'update_secret' tools now expect fields to be specified in a flattened dot-notation (e.g., 'bankAccount.accountType') instead of complex nested JSON objects. Each field's 'value' must be a single-element string array.
 
 ## Problem
-1. Claude was creating records with multiple values in simple fields (e.g., multiple passwords, emails)
-2. Claude was using incorrect field structures for complex types (e.g., bankRoutingNumber instead of bankAccount.routingNumber)
+Previously, AI models (Claude) were required to generate complex nested JSON for KSM record fields. This was error-prone, leading to issues like:
+1. Incorrectly structured complex fields (e.g., bank account details).
+2. Confusion about whether a field value should be a single string or an array of objects.
+3. Mismatches between the tool's JSON schema and the actual expected KSM SDK structures.
 
-## Solution
-1. **Enhanced Tool Descriptions**: Updated create_secret and update_secret tool descriptions to:
-   - Clarify which fields need single values vs complex structures
-   - Include inline examples of ALL complex field structures directly in the tool descriptions
-   - Show correct property names for bankAccount, paymentCard, address, phone, etc.
+## Solution: Flattened Fields & Server-Side Reconstruction
 
-2. **Added Smart Validation**: Implemented validation that:
-   - Only enforces single values for simple fields (password, login, email, etc.)
-   - Excludes complex fields that require structured data (bankAccount, securityQuestion, address, etc.)
-   - Automatically trims multiple values to first value for simple fields only
-   - Adds warnings when multiple values are detected and corrected
+1.  **Flattened Field Input (AI-Side)**:
+    *   AI models now provide all fields in a simple, flat format using dot notation for sub-fields of complex types.
+        *   Example: `fields: [{type: "bankAccount.accountType", value: ["checking"]}, {type: "bankAccount.routingNumber", value: ["123..."]}]`
+    *   The `value` for every field item is now consistently a single-element string array (e.g., `["the_value"]`).
 
-3. **Improved Field Structure Examples**: Tool descriptions now include:
-   - bankAccount: [{accountType:'checking', routingNumber:'123', accountNumber:'456'}]
-   - securityQuestion: [{question:'Q?', answer:'A'}]
-   - address: [{street1:'', city:'', state:'', zip:''}]
-   - phone: [{region:'US', number:'555-1234'}]
-   - And all other complex field structures
+2.  **Server-Side Reconstruction (MCP Server)**:
+    *   A new `processFieldsForSDK` function was implemented in `internal/mcp/tool_handlers.go`.
+    *   This function parses the incoming flattened fields.
+    *   It intelligently groups related sub-fields (e.g., `bankAccount.*`) and reconstructs the complex `map[string]interface{}` objects required by the KSM Go SDK for types like `bankAccount`, `address`, `phone`, `name`, `securityQuestion`, `paymentCard`, `host`, and `keyPair`.
+    *   It correctly handles mapping field names from your internal templates (e.g., `name.firstName`) to the names expected by the KSM Go SDK (e.g., `name.first`).
+    *   It ensures the correct KSM `type` is used for special cases (e.g., `privateKey` type for `keyPair` structures).
 
-## Fixed Fields
-The validation now correctly handles these complex field types:
-- bankAccount (with accountType, routingNumber, accountNumber)
-- paymentCard (with cardNumber, cardExpirationDate, cardSecurityCode)
-- address (with street1, street2, city, state, country, zip)
-- phone (with region, number, ext, type)
-- name (with first, middle, last)
-- securityQuestion (with question, answer)
-- keyPair (with publicKey, privateKey)
-- host (with hostName, port)
-- And other complex PAM-related fields
+3.  **Updated Tool Definitions (`internal/mcp/tools.go`)**:
+    *   The `InputSchema` for `create_secret` and `update_secret` tools now precisely define the new flattened field structure.
+    *   Descriptions clearly instruct AI models on using dot notation and providing single-element array values.
+    *   Examples of the new flattened format are included.
 
-This ensures AI models create properly structured records that match KSM SDK expectations. 
+4.  **Continued Single-Value Enforcement for Simple Fields**:
+    *   The `processFieldsForSDK` function still enforces that genuinely simple fields (e.g., `login`, `password`, `url`, `text`, `date`) only contain one value, trimming and warning if more are provided.
+
+## Benefits
+*   **Simplified AI Interaction**: Reduces the complexity of JSON generation for AI models, minimizing errors.
+*   **Robust Parsing**: The server now reliably transforms the simplified input into the structures the KSM SDK expects.
+*   **Clearer Schema**: The tool schema is now more accurate and easier for AI to follow.
+*   **Improved Data Integrity**: Reduces the chances of malformed records being sent to KSM.
+
+This major refactoring makes the secret creation and update process significantly more robust and AI-friendly. 

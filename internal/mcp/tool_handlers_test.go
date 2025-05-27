@@ -162,12 +162,16 @@ func TestExecuteCreateSecret(t *testing.T) {
 			serverOptions: &ServerOptions{BatchMode: true, AutoApprove: false},
 			expectError:   false,
 			mockSetup: func(client *mockKSMClient, confirmer *mockConfirmer) {
-				client.On("CreateSecret", mock.AnythingOfType("types.CreateSecretParams")).Return("test-uid-batch", nil)
+				client.On("ListFolders").Return(&types.ListFoldersResponse{
+					Folders: []types.FolderInfo{{UID: "root_folder", Name: "My Root", ParentUID: ""}},
+				}, nil).Once()
 			},
 			validate: func(t *testing.T, result interface{}) {
-				resultMap := result.(map[string]interface{})
-				assert.Equal(t, "test-uid-batch", resultMap["uid"])
-				assert.Equal(t, "Secret created successfully (confirmed).", resultMap["message"])
+				resultMap, ok := result.(map[string]interface{})
+				assert.True(t, ok, "Result should be a map")
+				assert.Equal(t, "folder_required_clarification", resultMap["status"])
+				assert.Contains(t, resultMap["message"].(string), "Folder UID (folder_uid) is required to create secret 'Test Secret B'.")
+				assert.NotNil(t, resultMap["available_folders"])
 			},
 		},
 		{
@@ -624,13 +628,14 @@ func TestExecuteKsmExecuteConfirmedAction(t *testing.T) {
 			name: "approve create_secret",
 			args: json.RawMessage(`{
 				"original_tool_name": "create_secret",
-				"original_tool_args_json": "{\"type\":\"login\",\"title\":\"Confirmed Secret\"}",
+				"original_tool_args_json": "{\"type\":\"login\",\"title\":\"Confirmed Secret\", \"folder_uid\":\"mock_folder_uid\"}",
 				"user_decision": true
 			}`),
 			expectError: false,
 			mockClientSetup: func(client *mockKSMClient) {
+				// client.On("ListFolders").Return(&types.ListFoldersResponse{Folders: []types.FolderInfo{}}, nil) // Tentatively add this - if folder_uid is truly empty, this will be hit.
 				client.On("CreateSecret", mock.MatchedBy(func(p types.CreateSecretParams) bool {
-					return p.Title == "Confirmed Secret"
+					return p.Title == "Confirmed Secret" && p.FolderUID == "mock_folder_uid"
 				})).Return("confirmed-uid", nil)
 			},
 			validateResult: func(t *testing.T, result interface{}) {

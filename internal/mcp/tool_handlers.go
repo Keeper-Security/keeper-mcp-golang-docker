@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/keeper-security/ksm-mcp/internal/audit"
@@ -615,53 +616,76 @@ func (s *Server) executeGetServerVersion(client KSMClient, args json.RawMessage)
 func (s *Server) executeCreateSecretConfirmed(client KSMClient, args json.RawMessage) (interface{}, error) {
 	var params types.CreateSecretParams
 	if err := json.Unmarshal(args, &params); err != nil {
-		return nil, fmt.Errorf("invalid parameters for confirmed create_secret: %w", err)
+		return nil, fmt.Errorf("invalid parameters for confirmed create_secret (initial unmarshal): %w", err)
 	}
 
-	// Validate and warn about multiple values in standard fields
-	standardFields := map[string]bool{
-		"password":      true,
-		"login":         true,
-		"email":         true,
-		"oneTimeCode":   true,
-		"licenseNumber": true,
-		"accountNumber": true,
-		"pinCode":       true,
-		"securityCode":  true,
-		"cardNumber":    true,
-		"routingNumber": true,
-	}
-
-	// Fields that require complex structures (arrays with maps) should be excluded
-	complexFields := map[string]bool{
-		"securityQuestion": true, // Requires [{question: "", answer: ""}]
-		"paymentCard":      true, // Requires complex structure
-		"address":          true, // Requires complex structure
-		"phone":            true, // Requires complex structure
-		"bankAccount":      true, // Requires complex structure
-		"keyPair":          true, // Requires complex structure
-		"host":             true, // Can be complex
-		"name":             true, // Can be complex
-		"pamHostname":      true, // Complex structure
-		"pamResources":     true, // Complex structure
-		"script":           true, // Complex structure
-		"passkey":          true, // Complex structure
-	}
-
-	var warnings []string
-	for i := range params.Fields {
-		field := &params.Fields[i]
-		// Skip complex fields that need structured data
-		if complexFields[field.Type] {
-			continue
+	// ==== BEGIN FOLDER UID CHECK ====
+	if params.FolderUID == "" {
+		s.logSystem(audit.EventAccess, "CreateSecret: No folder_uid provided. Requesting clarification.", map[string]interface{}{
+			"profile": s.currentProfile,
+			"title":   params.Title,
+		})
+		allFolders, listFoldersErr := client.ListFolders()
+		if listFoldersErr != nil {
+			s.logError("mcp", listFoldersErr, map[string]interface{}{
+				"operation": "executeCreateSecretConfirmed_listFolders_for_clarification",
+				"profile":   s.currentProfile,
+			})
+			// Fallback to a generic error if we can't even list folders
+			return nil, fmt.Errorf("failed to create secret '%s': folder_uid is required. Additionally, failed to retrieve folder list: %w", params.Title, listFoldersErr)
 		}
 
-		if standardFields[field.Type] && len(field.Value) > 1 {
-			warnings = append(warnings, fmt.Sprintf("Field '%s' has %d values but standard practice is to use only one value", field.Type, len(field.Value)))
-			// Keep only the first value for standard fields
-			field.Value = field.Value[:1]
+		var candidateFolders []types.FolderInfo
+		if allFolders != nil {
+			for _, f := range allFolders.Folders {
+				// Suggest top-level folders or shared folders. KSM typically requires records to be in shared folders via API.
+				// A more robust check for "isShared" would be ideal if the SDK provided it directly on FolderInfo.
+				// For now, top-level (ParentUID == "") is a common heuristic for shared roots.
+				if f.ParentUID == "" { // Consider also checking f.Type or a hypothetical f.IsShared if available
+					candidateFolders = append(candidateFolders, f)
+				}
+			}
+			// If no top-level folders, but other folders exist, offer all as potential parents.
+			// This might at least guide the user if they have a flat structure or specific shared subfolders.
+			if len(candidateFolders) == 0 && len(allFolders.Folders) > 0 {
+				s.logSystem(audit.EventAccess, "CreateSecret: No top-level folders found, preparing all folders for selection suggestion.", map[string]interface{}{})
+				candidateFolders = allFolders.Folders
+			}
 		}
+
+		clarificationMessage := fmt.Sprintf("Folder UID (folder_uid) is required to create secret '%s'.", params.Title)
+
+		switch len(candidateFolders) {
+		case 0:
+			clarificationMessage += " No suitable folders are available to create the secret in. Please ensure a shared folder exists or create one."
+		case 1:
+			f := candidateFolders[0]
+			clarificationMessage += fmt.Sprintf(" The folder '%s' (UID: %s) is available. Would you like to use this folder?", f.Name, f.UID)
+		case 2, 3, 4, 5: // List a few folders directly in the message
+			var folderStrings []string
+			for _, f := range candidateFolders {
+				folderStrings = append(folderStrings, fmt.Sprintf("'%s' (UID: %s)", f.Name, f.UID))
+			}
+			clarificationMessage += fmt.Sprintf(" Please choose a folder from: %s, or use list_folders to see all.", strings.Join(folderStrings, ", "))
+		default: // More than 5 folders
+			clarificationMessage += " Please choose a folder. Refer to the 'available_folders' list from list_folders for names and UIDs."
+		}
+
+		return map[string]interface{}{
+			"status":                  "folder_required_clarification",
+			"message":                 clarificationMessage,
+			"available_folders":       candidateFolders, // Provide the list for AI to use
+			"original_tool_args_json": string(args),     // Allow AI to retry with folder_uid added
+		}, nil
 	}
+	// ==== END FOLDER UID CHECK ====
+
+	// Process the flattened fields into the structure the SDK expects
+	reconstructedFields, processingWarnings, err := processFieldsForSDK(params.Fields)
+	if err != nil {
+		return nil, fmt.Errorf("error processing fields for SDK structure: %w", err)
+	}
+	params.Fields = reconstructedFields // Replace original fields with processed ones
 
 	uid, err := client.CreateSecret(params)
 	if err != nil {
@@ -681,7 +705,7 @@ func (s *Server) executeCreateSecretConfirmed(client KSMClient, args json.RawMes
 						"profile":   s.currentProfile,
 					})
 					// Fallback to a generic error if we can't even list folders
-					return nil, fmt.Errorf("failed to create secret (KSM error: %s). A folder is required. Additionally, failed to retrieve folder list: %w", originalErrMessage, listFoldersErr)
+					return nil, fmt.Errorf("failed to create secret '%s': folder_uid is required. Additionally, failed to retrieve folder list: %w", params.Title, listFoldersErr)
 				}
 
 				var candidateFolders []types.FolderInfo
@@ -803,10 +827,14 @@ func (s *Server) executeCreateSecretConfirmed(client KSMClient, args json.RawMes
 		"message": "Secret created successfully (confirmed).",
 	}
 
-	// Add warnings if any
-	if len(warnings) > 0 {
-		response["warnings"] = warnings
-		response["message"] = "Secret created successfully (confirmed). Note: Multiple values were provided for standard fields but only the first value was used."
+	allWarnings := append(processingWarnings) // Add warnings from field processing
+
+	if len(allWarnings) > 0 {
+		response["warnings"] = allWarnings
+		// Modify message if only processing warnings, not value-trimming warnings specifically.
+		// For now, keep a generic addition for any warning.
+		currentMsg := response["message"].(string)
+		response["message"] = fmt.Sprintf("%s Some fields were processed or adjusted; see warnings.", currentMsg)
 	}
 
 	return response, nil
@@ -882,53 +910,14 @@ func (s *Server) executeGetAllSecretsUnmaskedConfirmed(client KSMClient, args js
 func (s *Server) executeUpdateSecretConfirmed(client KSMClient, args json.RawMessage) (interface{}, error) {
 	var params types.UpdateSecretParams
 	if err := json.Unmarshal(args, &params); err != nil {
-		return nil, fmt.Errorf("invalid parameters for confirmed update_secret: %w", err)
+		return nil, fmt.Errorf("invalid parameters for confirmed update_secret (initial unmarshal): %w", err)
 	}
 
-	// Validate and warn about multiple values in standard fields
-	standardFields := map[string]bool{
-		"password":      true,
-		"login":         true,
-		"email":         true,
-		"oneTimeCode":   true,
-		"licenseNumber": true,
-		"accountNumber": true,
-		"pinCode":       true,
-		"securityCode":  true,
-		"cardNumber":    true,
-		"routingNumber": true,
+	reconstructedFields, processingWarnings, err := processFieldsForSDK(params.Fields)
+	if err != nil {
+		return nil, fmt.Errorf("error processing fields for SDK structure during update: %w", err)
 	}
-
-	// Fields that require complex structures (arrays with maps) should be excluded
-	complexFields := map[string]bool{
-		"securityQuestion": true, // Requires [{question: "", answer: ""}]
-		"paymentCard":      true, // Requires complex structure
-		"address":          true, // Requires complex structure
-		"phone":            true, // Requires complex structure
-		"bankAccount":      true, // Requires complex structure
-		"keyPair":          true, // Requires complex structure
-		"host":             true, // Can be complex
-		"name":             true, // Can be complex
-		"pamHostname":      true, // Complex structure
-		"pamResources":     true, // Complex structure
-		"script":           true, // Complex structure
-		"passkey":          true, // Complex structure
-	}
-
-	var warnings []string
-	for i := range params.Fields {
-		field := &params.Fields[i]
-		// Skip complex fields that need structured data
-		if complexFields[field.Type] {
-			continue
-		}
-
-		if standardFields[field.Type] && len(field.Value) > 1 {
-			warnings = append(warnings, fmt.Sprintf("Field '%s' has %d values but standard practice is to use only one value", field.Type, len(field.Value)))
-			// Keep only the first value for standard fields
-			field.Value = field.Value[:1]
-		}
-	}
+	params.Fields = reconstructedFields
 
 	if err := client.UpdateSecret(params); err != nil {
 		return nil, err
@@ -939,10 +928,12 @@ func (s *Server) executeUpdateSecretConfirmed(client KSMClient, args json.RawMes
 		"message": "Secret updated successfully (confirmed).",
 	}
 
-	// Add warnings if any
-	if len(warnings) > 0 {
-		response["warnings"] = warnings
-		response["message"] = "Secret updated successfully (confirmed). Note: Multiple values were provided for standard fields but only the first value was used."
+	allWarnings := append(processingWarnings)
+
+	if len(allWarnings) > 0 {
+		response["warnings"] = allWarnings
+		currentMsg := response["message"].(string)
+		response["message"] = fmt.Sprintf("%s Some fields were processed or adjusted; see warnings.", currentMsg)
 	}
 
 	return response, nil
@@ -1179,4 +1170,338 @@ func (s *Server) executeDeleteFolderConfirmed(client KSMClient, args json.RawMes
 	}
 
 	return map[string]interface{}{"folder_uid": params.FolderUID, "message": "Folder deleted successfully (confirmed)."}, nil
+}
+
+// processFieldsForSDK reconstructs complex fields from a flattened list
+// and enforces single values for simple fields.
+func processFieldsForSDK(inputFields []types.SecretField) ([]types.SecretField, []string, error) {
+	processedFields := make([]types.SecretField, 0)
+	tempComplexFields := make(map[string]map[string]interface{}) // Stores parts of complex fields, e.g., tempComplexFields["bankAccount_0"]["routingNumber"] = "123"
+	complexFieldOrder := make(map[string][]string)               // Maintains order of elements for a complex field instance
+	warnings := make([]string, 0)
+
+	// Define simple fields that should strictly have only one value
+	singleValueSimpleFields := map[string]bool{
+		"password":      true,
+		"login":         true,
+		"email":         true,
+		"oneTimeCode":   true,
+		"licenseNumber": true,
+		// "accountNumber" is part of bankAccount, but can also be standalone. If standalone, it's simple.
+		// This logic assumes if "accountNumber" appears alone, it's simple.
+		// If it appears as "bankAccount.accountNumber", it's handled by complex logic.
+		"pinCode":        true,
+		"url":            true,
+		"text":           true,
+		"multiline":      true,
+		"secret":         true,
+		"note":           true,
+		"date":           true,
+		"birthDate":      true,
+		"expirationDate": true,
+		// Fields like fileRef, cardRef, addressRef, recordRef are simple string UIDs
+		"fileRef":        true,
+		"cardRef":        true,
+		"addressRef":     true,
+		"recordRef":      true,
+		"title":          true, // Though usually top-level, can be a field
+		"company":        true,
+		"groupNumber":    true,
+		"isSSIDHidden":   true, // checkbox, effectively boolean but SDK might take string "true"/"false"
+		"wifiEncryption": true, // dropdown
+		"directoryType":  true, // dropdown
+		"databaseType":   true, // dropdown
+		"rbiUrl":         true, // text
+		"key":            true, // often used for API keys, simple text
+		"securityCode":   true, // Simple text, like a CVV if not part of paymentCard
+		"cardNumber":     true, // Simple text, if not part of paymentCard
+		"routingNumber":  true, // Simple text, if not part of bankAccount
+	}
+
+	// Define complex fields and their expected sub-fields based on record-templates/field-types.json
+	// This map helps identify and parse flattened complex fields.
+	// The value is a map of the sub-field name to its type (not strictly enforced here but good for reference)
+	complexFieldDefinitions := map[string]map[string]string{
+		"name":             {"first": "string", "middle": "string", "last": "string"}, // Aligned with SDK & vault client's NameFieldData
+		"phone":            {"region": "string", "number": "string", "ext": "string", "type": "string"},
+		"address":          {"street1": "string", "street2": "string", "city": "string", "state": "string", "zip": "string", "country": "string"},
+		"host":             {"hostName": "string", "port": "string"},
+		"securityQuestion": {"question": "string", "answer": "string"},
+		"paymentCard":      {"cardNumber": "string", "cardExpirationDate": "string", "cardSecurityCode": "string"},
+		"bankAccount":      {"accountType": "string", "routingNumber": "string", "accountNumber": "string", "otherType": "string"},
+		"keyPair":          {"publicKey": "string", "privateKey": "string"},
+		"pamHostname":      {"hostName": "string", "port": "string"},
+		"passkey":          {"privateKey": "string", "credentialId": "string", "signCount": "string", "userId": "string", "relyingParty": "string", "username": "string", "createdDate": "string"}, // Values will be strings from AI, SDK handles conversion for int64
+		"appFiller":        {"applicationTitle": "string", "contentFilter": "string", "macroSequence": "string"},
+		"pamResources":     {"controllerUid": "string", "folderUid": "string", "resourceRef": "string"}, // resourceRef is string array, AI sends as comma-sep string?
+		"script":           {"command": "string", "fileRef": "string", "recordRef": "string"},           // recordRef is string array, AI sends as comma-sep string?
+	}
+
+	for _, field := range inputFields {
+		parts := strings.SplitN(field.Type, ".", 2)
+		baseType := parts[0]
+		subField := ""
+		if len(parts) > 1 {
+			subField = parts[1]
+		}
+
+		definition, isComplex := complexFieldDefinitions[baseType]
+
+		if isComplex && subField != "" {
+			if _, ok := definition[subField]; !ok {
+				// This subField is not defined for this complex type, treat baseType as simple
+				// Or it could be an error / unexpected field. For now, log a warning or error.
+				warnings = append(warnings, fmt.Sprintf("Warning: Field '%s' contains an unrecognized sub-field '%s'. Treating '%s' as a simple field.", field.Type, subField, baseType))
+				// Fallback to treating the original field.Type as simple if sub-field is not recognized
+				if singleValueSimpleFields[field.Type] && len(field.Value) > 1 {
+					warnings = append(warnings, fmt.Sprintf("Field '%s' (treated as simple) has %d values; using only the first.", field.Type, len(field.Value)))
+					field.Value = field.Value[:1]
+				}
+				processedFields = append(processedFields, field)
+				continue
+			}
+
+			// For complex fields, the SDK usually expects ONE structured object in the field's "value" array.
+			// We use "baseType_0" as a key to group sub-fields for the *first* instance of this complex type.
+			// Supporting multiple instances of the same complex type (e.g. two phone numbers) would require indexing (phone_0, phone_1).
+			// For now, assuming only one instance of each complex field type per secret for simplicity with this flattened approach.
+			instanceKey := baseType + "_0"
+			if _, ok := tempComplexFields[instanceKey]; !ok {
+				tempComplexFields[instanceKey] = make(map[string]interface{})
+				complexFieldOrder[instanceKey] = make([]string, 0) // Store order of subfields
+			}
+			if len(field.Value) > 0 {
+				// Take the first element from the value array, as per our single-value principle for the flattened representation
+				tempComplexFields[instanceKey][subField] = field.Value[0]
+				complexFieldOrder[instanceKey] = append(complexFieldOrder[instanceKey], subField)
+			} else {
+				// Handle cases where a sub-field might be present but have an empty value array
+				tempComplexFields[instanceKey][subField] = "" // Or an appropriate default
+			}
+
+		} else { // Simple field or a complex field that wasn't split (e.g. "otp", "file", or user provided "bankAccount" without ".subfield")
+			if singleValueSimpleFields[field.Type] && len(field.Value) > 1 {
+				warnings = append(warnings, fmt.Sprintf("Field '%s' has %d values; using only the first.", field.Type, len(field.Value)))
+				field.Value = field.Value[:1] // Enforce single value
+			}
+			// Special handling for fields that are complex by nature but might be passed without sub-fields initially
+			// e.g. a raw "securityQuestion" field before it's broken down.
+			// If it's a known complex type but passed without sub-field, it might be an error or needs default handling.
+			// For now, just add it as is, KSM SDK might reject it if structure is wrong.
+			processedFields = append(processedFields, field)
+		}
+	}
+
+	// Reconstruct complex fields
+	for instanceKey, subFieldsMap := range tempComplexFields {
+		baseType := strings.SplitN(instanceKey, "_", 2)[0]
+
+		// The KSM Go SDK expects specific struct types for complex fields,
+		// not just map[string]interface{}. We need to marshal to the correct type.
+		// This requires knowing the target struct for each baseType.
+
+		// Example for 'name' based on record-templates (firstName, lastName, fullName)
+		// but KSM SDK for 'name' field type expects {first, middle, last}.
+		// This is a mismatch we need to handle.
+		// For 'bankAccount', KSM SDK expects {accountType, routingNumber, accountNumber, otherType}
+		// For 'host', KSM SDK expects {hostName, port}
+		// For 'securityQuestion', KSM SDK expects {question, answer}
+
+		var complexValue interface{}
+		switch baseType {
+		case "name":
+			nameMap := make(map[string]interface{})
+			if fn, ok := subFieldsMap["first"].(string); ok {
+				nameMap["first"] = fn
+			}
+			if mn, ok := subFieldsMap["middle"].(string); ok {
+				nameMap["middle"] = mn
+			}
+			if ln, ok := subFieldsMap["last"].(string); ok {
+				nameMap["last"] = ln
+			}
+			complexValue = nameMap
+		case "phone":
+			phoneMap := make(map[string]interface{})
+			if r, ok := subFieldsMap["region"].(string); ok {
+				phoneMap["region"] = r
+			}
+			if n, ok := subFieldsMap["number"].(string); ok {
+				phoneMap["number"] = n
+			}
+			if e, ok := subFieldsMap["ext"].(string); ok {
+				phoneMap["ext"] = e
+			}
+			if t, ok := subFieldsMap["type"].(string); ok {
+				phoneMap["type"] = t
+			}
+			complexValue = phoneMap
+		case "address":
+			addressMap := make(map[string]interface{})
+			if s1, ok := subFieldsMap["street1"].(string); ok {
+				addressMap["street1"] = s1
+			}
+			if s2, ok := subFieldsMap["street2"].(string); ok {
+				addressMap["street2"] = s2
+			}
+			if city, ok := subFieldsMap["city"].(string); ok {
+				addressMap["city"] = city
+			}
+			if st, ok := subFieldsMap["state"].(string); ok {
+				addressMap["state"] = st
+			}
+			if z, ok := subFieldsMap["zip"].(string); ok {
+				addressMap["zip"] = z
+			}
+			if co, ok := subFieldsMap["country"].(string); ok {
+				addressMap["country"] = co
+			}
+			complexValue = addressMap
+		case "host", "pamHostname":
+			hostMap := make(map[string]interface{})
+			if hn, ok := subFieldsMap["hostName"].(string); ok {
+				hostMap["hostName"] = hn
+			}
+			if p, ok := subFieldsMap["port"].(string); ok {
+				hostMap["port"] = p
+			}
+			complexValue = hostMap
+		case "securityQuestion":
+			sqMap := make(map[string]interface{})
+			if q, ok := subFieldsMap["question"].(string); ok {
+				sqMap["question"] = q
+			}
+			if a, ok := subFieldsMap["answer"].(string); ok {
+				sqMap["answer"] = a
+			}
+			complexValue = sqMap
+		case "paymentCard":
+			cardMap := make(map[string]interface{})
+			if cn, ok := subFieldsMap["cardNumber"].(string); ok {
+				cardMap["cardNumber"] = cn
+			}
+			if ced, ok := subFieldsMap["cardExpirationDate"].(string); ok {
+				cardMap["cardExpirationDate"] = ced
+			}
+			if csc, ok := subFieldsMap["cardSecurityCode"].(string); ok {
+				cardMap["cardSecurityCode"] = csc
+			}
+			complexValue = cardMap
+		case "bankAccount":
+			bankMap := make(map[string]interface{})
+			if at, ok := subFieldsMap["accountType"].(string); ok {
+				bankMap["accountType"] = at
+			}
+			if rn, ok := subFieldsMap["routingNumber"].(string); ok {
+				bankMap["routingNumber"] = rn
+			}
+			if an, ok := subFieldsMap["accountNumber"].(string); ok {
+				bankMap["accountNumber"] = an
+			}
+			if ot, ok := subFieldsMap["otherType"].(string); ok {
+				bankMap["otherType"] = ot
+			}
+			complexValue = bankMap
+		case "keyPair":
+			keyPairMap := make(map[string]interface{})
+			if pub, ok := subFieldsMap["publicKey"].(string); ok {
+				keyPairMap["publicKey"] = pub
+			}
+			if priv, ok := subFieldsMap["privateKey"].(string); ok {
+				keyPairMap["privateKey"] = priv
+			}
+			complexValue = keyPairMap
+			processedFields = append(processedFields, types.SecretField{
+				Type:  "privateKey",
+				Value: []interface{}{complexValue},
+			})
+			continue
+		case "passkey":
+			passkeyMap := make(map[string]interface{})
+			if pk, ok := subFieldsMap["privateKey"].(string); ok {
+				passkeyMap["privateKey"] = pk
+			}
+			if cid, ok := subFieldsMap["credentialId"].(string); ok {
+				passkeyMap["credentialId"] = cid
+			}
+			if scStr, okSc := subFieldsMap["signCount"].(string); okSc {
+				if sc, err := strconv.ParseInt(scStr, 10, 64); err == nil {
+					passkeyMap["signCount"] = sc
+				} else {
+					warnings = append(warnings, fmt.Sprintf("Warning: Could not parse passkey.signCount '%s' as integer for field '%s'. Using string value.", scStr, instanceKey))
+					passkeyMap["signCount"] = scStr // Fallback to string if parse fails
+				}
+			}
+			if uid, ok := subFieldsMap["userId"].(string); ok {
+				passkeyMap["userId"] = uid
+			}
+			if rp, ok := subFieldsMap["relyingParty"].(string); ok {
+				passkeyMap["relyingParty"] = rp
+			}
+			if un, ok := subFieldsMap["username"].(string); ok {
+				passkeyMap["username"] = un
+			}
+			if cdStr, okCd := subFieldsMap["createdDate"].(string); okCd {
+				if cd, err := strconv.ParseInt(cdStr, 10, 64); err == nil {
+					passkeyMap["createdDate"] = cd
+				} else {
+					warnings = append(warnings, fmt.Sprintf("Warning: Could not parse passkey.createdDate '%s' as integer for field '%s'. Using string value.", cdStr, instanceKey))
+					passkeyMap["createdDate"] = cdStr // Fallback to string
+				}
+			}
+			complexValue = passkeyMap
+		case "appFiller":
+			appFillerMap := make(map[string]interface{})
+			if at, ok := subFieldsMap["applicationTitle"].(string); ok {
+				appFillerMap["applicationTitle"] = at
+			}
+			if cf, ok := subFieldsMap["contentFilter"].(string); ok {
+				appFillerMap["contentFilter"] = cf
+			}
+			if ms, ok := subFieldsMap["macroSequence"].(string); ok {
+				appFillerMap["macroSequence"] = ms
+			}
+			complexValue = appFillerMap
+		case "pamResources":
+			pamResourcesMap := make(map[string]interface{})
+			if cuid, ok := subFieldsMap["controllerUid"].(string); ok {
+				pamResourcesMap["controllerUid"] = cuid
+			}
+			if fuid, ok := subFieldsMap["folderUid"].(string); ok {
+				pamResourcesMap["folderUid"] = fuid
+			}
+			if rr, ok := subFieldsMap["resourceRef"].(string); ok { // Assuming AI sends comma-separated string for array
+				pamResourcesMap["resourceRef"] = strings.Split(rr, ",")
+			} else {
+				pamResourcesMap["resourceRef"] = []string{} // Default to empty array
+			}
+			complexValue = pamResourcesMap
+		case "script":
+			scriptMap := make(map[string]interface{})
+			if cmd, ok := subFieldsMap["command"].(string); ok {
+				scriptMap["command"] = cmd
+			}
+			if fr, ok := subFieldsMap["fileRef"].(string); ok {
+				scriptMap["fileRef"] = fr
+			}
+			if rr, ok := subFieldsMap["recordRef"].(string); ok { // Assuming AI sends comma-separated string for array
+				scriptMap["recordRef"] = strings.Split(rr, ",")
+			} else {
+				scriptMap["recordRef"] = []string{}
+			}
+			complexValue = scriptMap
+		default:
+			// For other complex types not explicitly handled, pass as map[string]interface{}
+			// KSM SDK might handle it if the structure matches, or reject it.
+			// This is a fallback and might lead to issues if SDK strictly needs typed structs.
+			complexValue = subFieldsMap
+			warnings = append(warnings, fmt.Sprintf("Warning: Complex field type '%s' is using a generic map structure. SDK compatibility not guaranteed.", baseType))
+		}
+
+		processedFields = append(processedFields, types.SecretField{
+			Type:  baseType, // Use the original base type for the reconstructed field
+			Value: []interface{}{complexValue},
+		})
+	}
+	return processedFields, warnings, nil
 }

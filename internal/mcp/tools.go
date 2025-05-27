@@ -145,36 +145,38 @@ func (s *Server) getAvailableTools() []types.MCPTool {
 		// Phase 2 Tools
 		{
 			Name:        "create_secret",
-			Description: "Create a new secret (requires confirmation). IMPORTANT: Simple fields (password, login, email) use single values. Complex fields require specific structures - bankAccount: [{accountType:'checking', routingNumber:'123', accountNumber:'456'}], securityQuestion: [{question:'Q?', answer:'A'}], address: [{street1:'', city:'', state:'', zip:''}], phone: [{region:'US', number:'555-1234'}]",
+			Description: "Create a new KSM secret. Fields are specified in a flattened format. Examples: 'login', 'password', 'bankAccount.accountType', 'phone.type', 'name.first', 'passkey.credentialId'. For enum-like fields (e.g., phone.type, bankAccount.accountType), use TitleCase values (e.g., 'Mobile', 'Checking'). Requires confirmation.",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
 					"folder_uid": map[string]interface{}{
 						"type":        "string",
-						"description": "Folder UID to create secret in",
+						"description": "(Optional) Folder UID to create the secret in. If omitted, AI will be prompted to select or confirm a folder.",
 					},
 					"type": map[string]interface{}{
 						"type":        "string",
-						"description": "Secret type (e.g., login)",
+						"description": "Secret type (e.g., login, bankAccount, contact). This determines the overall template.",
 					},
 					"title": map[string]interface{}{
 						"type":        "string",
-						"description": "Secret title",
+						"description": "Secret title.",
 					},
 					"fields": map[string]interface{}{
 						"type":        "array",
-						"description": "Field values array. IMPORTANT: Use only ONE value per field for standard fields (password, login, email, etc.)",
+						"description": "Array of field objects. Use flattened dot notation for complex fields (e.g., bankAccount.routingNumber). Each field value must be an array with a single string element, e.g., {type: \"login\", value: [\"user\"]}, {type: \"bankAccount.accountType\", value: [\"Checking\"]}.",
 						"items": map[string]interface{}{
 							"type": "object",
 							"properties": map[string]interface{}{
 								"type": map[string]interface{}{
 									"type":        "string",
-									"description": "Field type (login, password, url, etc.)",
+									"description": "Field type, using dot notation for sub-fields (e.g., login, bankAccount.accountType, address.street1).",
 								},
 								"value": map[string]interface{}{
 									"type":        "array",
-									"description": "Field values - Simple fields: ['value'], Complex fields: bankAccount:[{accountType,routingNumber,accountNumber}], paymentCard:[{cardNumber,cardExpirationDate,cardSecurityCode}], address:[{street1,street2,city,state,country,zip}], phone:[{region,number,ext,type}], name:[{first,middle,last}], securityQuestion:[{question,answer}], keyPair:[{publicKey,privateKey}], host:[{hostName,port}]",
+									"description": "Field value, as a single-element array (e.g., [\"the_value\"] ). For enum-like sub-fields (e.g. phone.type), use TitleCase values (e.g. [\"Mobile\"]). Example complex fields: bankAccount:[{accountType,routingNumber,accountNumber}], name:[{first,middle,last}], passkey:[{privateKey,credentialId,signCount,userId,relyingParty,username,createdDate}], appFiller:[{applicationTitle,contentFilter,macroSequence}], script:[{command,fileRef,recordRef (comma-sep UIDs)}], pamResources:[{controllerUid,folderUid,resourceRef (comma-sep UIDs)}]",
 									"items":       map[string]interface{}{"type": "string"},
+									"minItems":    1,
+									"maxItems":    1,
 								},
 							},
 							"required": []string{"type", "value"},
@@ -182,40 +184,42 @@ func (s *Server) getAvailableTools() []types.MCPTool {
 					},
 					"notes": map[string]interface{}{
 						"type":        "string",
-						"description": "Secret notes",
+						"description": "(Optional) Secret notes.",
 					},
 				},
-				"required": []string{"type", "title"},
+				"required": []string{"type", "title", "fields"},
 			},
 		},
 		{
 			Name:        "update_secret",
-			Description: "Update an existing secret (requires confirmation). IMPORTANT: Simple fields (password, login, email) use single values. Complex fields require specific structures - bankAccount: [{accountType:'checking', routingNumber:'123', accountNumber:'456'}], securityQuestion: [{question:'Q?', answer:'A'}], address: [{street1:'', city:'', state:'', zip:''}], phone: [{region:'US', number:'555-1234'}]",
+			Description: "Update an existing KSM secret. Fields are specified in a flattened format. Examples: 'login', 'password', 'bankAccount.accountType', 'phone.type', 'name.first', 'passkey.credentialId'. For enum-like fields (e.g., phone.type, bankAccount.accountType), use TitleCase values (e.g., 'Mobile', 'Checking'). Requires confirmation.",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
 					"uid": map[string]interface{}{
 						"type":        "string",
-						"description": "Secret UID to update",
+						"description": "UID of the secret to update.",
 					},
 					"title": map[string]interface{}{
 						"type":        "string",
-						"description": "New title",
+						"description": "(Optional) New title for the secret.",
 					},
 					"fields": map[string]interface{}{
 						"type":        "array",
-						"description": "Field values to update. IMPORTANT: Use only ONE value per field for standard fields (password, login, email, etc.)",
+						"description": "Array of field objects to update or add. Use flattened dot notation for complex fields (e.g., bankAccount.routingNumber). Each field value must be an array with a single string element, e.g., {type: \"login\", value: [\"user\"]}, {type: \"bankAccount.accountType\", value: [\"Checking\"]}. If a field type is provided that already exists, its value will be replaced. If it doesn't exist, it will be added.",
 						"items": map[string]interface{}{
 							"type": "object",
 							"properties": map[string]interface{}{
 								"type": map[string]interface{}{
 									"type":        "string",
-									"description": "Field type (login, password, url, etc.)",
+									"description": "Field type, using dot notation for sub-fields (e.g., login, bankAccount.accountType, address.street1).",
 								},
 								"value": map[string]interface{}{
 									"type":        "array",
-									"description": "Field values - Simple fields: ['value'], Complex fields: bankAccount:[{accountType,routingNumber,accountNumber}], paymentCard:[{cardNumber,cardExpirationDate,cardSecurityCode}], address:[{street1,street2,city,state,country,zip}], phone:[{region,number,ext,type}], name:[{first,middle,last}], securityQuestion:[{question,answer}], keyPair:[{publicKey,privateKey}], host:[{hostName,port}]",
+									"description": "Field value, as a single-element array (e.g., [\"the_value\"] ). For enum-like sub-fields (e.g. phone.type), use TitleCase values (e.g. [\"Mobile\"]). Example complex fields: bankAccount:[{accountType,routingNumber,accountNumber}], name:[{first,middle,last}], passkey:[{privateKey,credentialId,signCount,userId,relyingParty,username,createdDate}], appFiller:[{applicationTitle,contentFilter,macroSequence}], script:[{command,fileRef,recordRef (comma-sep UIDs)}], pamResources:[{controllerUid,folderUid,resourceRef (comma-sep UIDs)}]",
 									"items":       map[string]interface{}{"type": "string"},
+									"minItems":    1,
+									"maxItems":    1,
 								},
 							},
 							"required": []string{"type", "value"},
@@ -223,7 +227,7 @@ func (s *Server) getAvailableTools() []types.MCPTool {
 					},
 					"notes": map[string]interface{}{
 						"type":        "string",
-						"description": "New notes",
+						"description": "(Optional) New notes for the secret. If provided, this will replace existing notes.",
 					},
 				},
 				"required": []string{"uid"},
