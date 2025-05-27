@@ -31,6 +31,7 @@ type KSMClient interface {
 	// Folder operations
 	ListFolders() (*types.ListFoldersResponse, error)
 	CreateFolder(name string, parentUID string) (string, error)
+	DeleteFolder(uid string, force bool) error
 
 	// Connection testing
 	TestConnection() error

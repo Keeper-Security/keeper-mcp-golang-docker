@@ -739,16 +739,178 @@ func (s *Server) executeUploadFileConfirmed(client KSMClient, args json.RawMessa
 }
 
 func (s *Server) executeCreateFolderConfirmed(client KSMClient, args json.RawMessage) (interface{}, error) {
-	var paramsForDesc struct {
+	var params struct {
 		Name      string `json:"name"`
 		ParentUID string `json:"parent_uid,omitempty"`
 	}
-	if err := json.Unmarshal(args, &paramsForDesc); err != nil {
+	if err := json.Unmarshal(args, &params); err != nil {
 		return nil, fmt.Errorf("invalid parameters for confirmed create_folder: %w", err)
 	}
-	uid, err := client.CreateFolder(paramsForDesc.Name, paramsForDesc.ParentUID)
-	if err != nil {
-		return nil, err
+
+	if params.Name == "" {
+		return nil, fmt.Errorf("folder name is required")
 	}
-	return map[string]interface{}{"uid": uid, "name": paramsForDesc.Name, "message": "Folder created successfully (confirmed)."}, nil
+
+	// If ParentUID is not provided, guide the AI to select one.
+	if params.ParentUID == "" {
+		s.logger.LogSystem(audit.EventAccess, "CreateFolder: No parent_uid provided. Requesting clarification.", map[string]interface{}{
+			"profile": s.currentProfile,
+			"name":    params.Name,
+		})
+		allFoldersResponse, listFoldersErr := client.ListFolders()
+		if listFoldersErr != nil {
+			s.logger.LogError("mcp", listFoldersErr, map[string]interface{}{
+				"operation": "executeCreateFolderConfirmed_listFolders_for_parent_clarification",
+				"profile":   s.currentProfile,
+			})
+			// Fallback to a generic error if we can't list folders
+			return nil, fmt.Errorf("failed to create folder '%s': a parent_uid is required. Additionally, failed to retrieve folder list to offer suggestions: %w", params.Name, listFoldersErr)
+		}
+
+		var suitableParentFolders []types.FolderInfo
+		if allFoldersResponse != nil {
+			for _, f := range allFoldersResponse.Folders {
+				// Heuristic: Top-level folders are potential shared folder targets for new folders.
+				// A more robust check for "isShared" might be needed if SDK/API provides it.
+				if f.ParentUID == "" {
+					suitableParentFolders = append(suitableParentFolders, f)
+				}
+			}
+			if len(suitableParentFolders) == 0 && len(allFoldersResponse.Folders) > 0 {
+				// If no top-level, but other folders exist, offer all as potential parents.
+				// This might guide user to pick an appropriate shared folder even if nested.
+				s.logger.LogSystem(audit.EventAccess, "CreateFolder: No top-level folders found, providing all folders as potential parents for selection.", map[string]interface{}{})
+				suitableParentFolders = allFoldersResponse.Folders
+			}
+		}
+
+		clarificationMessage := fmt.Sprintf("Failed to create folder '%s': A parent folder UID (parent_uid) is required by KSM.", params.Name)
+		switch len(suitableParentFolders) {
+		case 0:
+			clarificationMessage += " No suitable parent folders found to suggest. Please ensure a shared folder exists and is accessible."
+		case 1:
+			f := suitableParentFolders[0]
+			clarificationMessage += fmt.Sprintf(" The folder '%s' (UID: %s) is available. Would you like to create the new folder under this one?", f.Name, f.UID)
+		case 2, 3, 4, 5:
+			var folderStrings []string
+			for _, f := range suitableParentFolders {
+				folderStrings = append(folderStrings, fmt.Sprintf("'%s' (UID: %s)", f.Name, f.UID))
+			}
+			clarificationMessage += fmt.Sprintf(" Please choose a parent folder from: %s.", strings.Join(folderStrings, ", "))
+		default: // More than 5 folders
+			clarificationMessage += " Please choose a parent folder. Refer to the 'available_parent_folders' list for names and UIDs."
+		}
+
+		return map[string]interface{}{
+			"status":                   "parent_uid_required_clarification",
+			"message":                  clarificationMessage,
+			"available_parent_folders": suitableParentFolders,
+			"original_tool_args_json":  string(args),
+		}, nil
+	}
+
+	// If ParentUID is provided, proceed with creation attempt.
+	uid, err := client.CreateFolder(params.Name, params.ParentUID)
+	if err != nil {
+		return nil, err // Error already formatted by client.CreateFolder
+	}
+	return map[string]interface{}{"uid": uid, "name": params.Name, "message": "Folder created successfully (confirmed)."}, nil
+}
+
+// executeDeleteFolder handles the delete_folder tool (confirmation step)
+func (s *Server) executeDeleteFolder(client KSMClient, args json.RawMessage) (interface{}, error) {
+	var params struct {
+		FolderUID string `json:"folder_uid"`
+		Force     bool   `json:"force,omitempty"`
+	}
+	if err := json.Unmarshal(args, &params); err != nil {
+		return nil, fmt.Errorf("invalid parameters for delete_folder: %w", err)
+	}
+
+	if params.FolderUID == "" {
+		return nil, fmt.Errorf("folder_uid is required to delete a folder")
+	}
+
+	// Get folder name for a more descriptive confirmation message
+	var folderName = params.FolderUID // Default to UID if name lookup fails
+	if client != nil {                // KSMClient might be nil if called without an active profile (should not happen for this tool)
+		foldersResponse, err := client.ListFolders()
+		if err == nil && foldersResponse != nil {
+			for _, f := range foldersResponse.Folders {
+				if f.UID == params.FolderUID {
+					folderName = f.Name
+					break
+				}
+			}
+		}
+	}
+
+	actionDescription := fmt.Sprintf("Permanently delete KSM folder '%s' (UID: %s)", folderName, params.FolderUID)
+	warningMessage := "This action CANNOT BE UNDONE."
+	if params.Force {
+		warningMessage += " The folder and ALL ITS CONTENTS (secrets and subfolders) will be permanently removed."
+	} else {
+		warningMessage += " The folder must be empty to be deleted."
+	}
+
+	// Check if auto-approving
+	if s.options.BatchMode || s.options.AutoApprove {
+		s.logger.LogSystem(audit.EventAccess, "DeleteFolder: Batch/AutoApprove mode, executing directly", map[string]interface{}{
+			"profile":    s.currentProfile,
+			"folder_uid": params.FolderUID,
+			"force":      params.Force,
+		})
+		return s.executeDeleteFolderConfirmed(client, args)
+	}
+
+	confirmationDetails := map[string]interface{}{
+		"prompt_name": "ksm_confirm_action",
+		"prompt_arguments": map[string]interface{}{
+			"action_description":      actionDescription,
+			"warning_message":         warningMessage,
+			"original_tool_name":      "delete_folder",
+			"original_tool_args_json": string(args),
+		},
+	}
+
+	s.logger.LogSystem(audit.EventAccess, "DeleteFolder: Confirmation required", map[string]interface{}{
+		"profile":    s.currentProfile,
+		"folder_uid": params.FolderUID,
+		"force":      params.Force,
+	})
+
+	return map[string]interface{}{
+		"status":               "confirmation_required",
+		"message":              fmt.Sprintf("Confirmation required to %s. Use the 'ksm_confirm_action' prompt.", actionDescription),
+		"confirmation_details": confirmationDetails,
+	}, nil
+}
+
+// executeDeleteFolderConfirmed handles the confirmed deletion of a folder
+func (s *Server) executeDeleteFolderConfirmed(client KSMClient, args json.RawMessage) (interface{}, error) {
+	var params struct {
+		FolderUID string `json:"folder_uid"`
+		Force     bool   `json:"force,omitempty"`
+	}
+	if err := json.Unmarshal(args, &params); err != nil {
+		return nil, fmt.Errorf("invalid parameters for confirmed delete_folder: %w", err)
+	}
+
+	if params.FolderUID == "" {
+		return nil, fmt.Errorf("folder_uid is required for confirmed delete_folder")
+	}
+
+	if client == nil {
+		return nil, fmt.Errorf("KSM client not available for confirmed delete_folder")
+	}
+
+	if err := client.DeleteFolder(params.FolderUID, params.Force); err != nil {
+		// Specific error for non-empty folder if not using force, based on typical SDK behavior
+		if !params.Force && strings.Contains(strings.ToLower(err.Error()), "folder is not empty") {
+			return nil, fmt.Errorf("failed to delete folder '%s': folder is not empty. Use 'force: true' to delete a non-empty folder. Original error: %w", params.FolderUID, err)
+		}
+		return nil, err // Error should be formatted by client.DeleteFolder
+	}
+
+	return map[string]interface{}{"folder_uid": params.FolderUID, "message": "Folder deleted successfully (confirmed)."}, nil
 }

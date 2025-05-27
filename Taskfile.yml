@@ -55,7 +55,7 @@ tasks:
         echo '        "-e", "KSM_MCP_LOG_LEVEL=error",'
         echo '        "-v", "ksm-mcp-data:/home/ksm/.keeper/ksm-mcp",'
         echo '        "{{.DOCKER_IMAGE}}:latest",'
-        echo '        "serve", "--stdio"'
+        echo '        "serve"'
         echo '      ]'
         echo '    }'
         echo '  }'

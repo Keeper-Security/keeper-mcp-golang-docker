@@ -13,14 +13,6 @@ if [ -n "$KSM_CONFIG_BASE64" ] && [ -z "$KSM_MCP_PROFILE" ]; then
     fi
 fi
 
-# Detect if we're running in MCP mode (serve command)
-case "$*" in
-    *serve*)
-        # Set MCP mode to stdio when running serve command in Docker
-        export KSM_MCP_MODE="stdio"
-        ;;
-esac
-
 # Execute the command
 # If the first argument doesn't start with ksm-mcp, prepend it
 case "$1" in

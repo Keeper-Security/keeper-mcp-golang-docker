@@ -325,6 +325,25 @@ func (s *Server) getAvailableTools() []types.MCPTool {
 			Description: "Get the current version of the KSM MCP server",
 			InputSchema: map[string]interface{}{"type": "object", "properties": map[string]interface{}{}},
 		},
+		{
+			Name:        "delete_folder",
+			Description: "Delete a folder (requires confirmation). Optionally force delete if not empty.",
+			InputSchema: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"folder_uid": map[string]interface{}{
+						"type":        "string",
+						"description": "UID of the folder to delete",
+					},
+					"force": map[string]interface{}{
+						"type":        "boolean",
+						"description": "If true, delete the folder even if it is not empty. This is a destructive operation.",
+						"default":     false,
+					},
+				},
+				"required": []string{"folder_uid"},
+			},
+		},
 		// New tool for handling confirmed actions
 		{
 			Name:        "ksm_execute_confirmed_action",
@@ -412,6 +431,8 @@ func (s *Server) executeTool(toolName string, args json.RawMessage) (interface{}
 		// We can pass nil as it won't be used.
 		client, _ := s.getCurrentClient() // Get client, ignore error for this specific case or handle if critical
 		return s.executeGetServerVersion(client, args)
+	case "delete_folder":
+		return s.executeDeleteFolder(client, args)
 	case "ksm_execute_confirmed_action":
 		return s.executeKsmExecuteConfirmedAction(args)
 
@@ -475,6 +496,8 @@ func (s *Server) executeKsmExecuteConfirmedAction(args json.RawMessage) (interfa
 		return s.executeUploadFileConfirmed(client, originalToolArgs)
 	case "create_folder":
 		return s.executeCreateFolderConfirmed(client, originalToolArgs)
+	case "delete_folder":
+		return s.executeDeleteFolderConfirmed(client, originalToolArgs)
 
 	// Add other sensitive tools here
 	default:

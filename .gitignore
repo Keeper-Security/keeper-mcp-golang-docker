@@ -65,3 +65,4 @@ temp/
 profiles/
 *.key
 *.pem
+ksm-mcp*

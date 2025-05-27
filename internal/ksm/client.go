@@ -956,33 +956,116 @@ func (c *Client) ListFolders() (*types.ListFoldersResponse, error) {
 
 // CreateFolder creates a new folder
 func (c *Client) CreateFolder(name, parentUID string) (string, error) {
-	// Log creation attempt
 	c.logger.LogAccess("folder", "create", "", c.profile, true, map[string]interface{}{
 		"name":   name,
 		"parent": parentUID,
 	})
 
-	// Get existing folders for parent validation
-	folders, err := c.sm.GetFolders()
+	// Get existing folders for context and validation (SDK might use this)
+	allKeeperFolders, err := c.sm.GetFolders()
 	if err != nil {
-		return "", fmt.Errorf("failed to get folders: %w", err)
+		return "", fmt.Errorf("failed to get folders prior to creating folder '%s': %w", name, err)
 	}
 
-	// Create folder
+	if parentUID == "" {
+		c.logger.LogSystem(audit.EventError, "CreateFolder: parentUID is empty. KSM API requires a parent shared folder UID for folder creation.", map[string]interface{}{"name": name, "profile": c.profile})
+		return "", fmt.Errorf("failed to create folder '%s': a parent folder UID (parent_uid) is required by KSM. This usually needs to be a Shared Folder UID", name)
+	}
+
 	options := sm.CreateOptions{
-		FolderUid: parentUID,
+		FolderUid:    parentUID, // The UID of the folder under which the new folder will be created.
+		SubFolderUid: "",        // If creating directly under FolderUid, SubFolderUid is empty for this SDK call.
 	}
 
-	folderUID, err := c.sm.CreateFolder(options, name, folders)
+	folderUID, err := c.sm.CreateFolder(options, name, allKeeperFolders) // Pass allKeeperFolders
 	if err != nil {
 		c.logger.LogError("ksm", err, map[string]interface{}{
-			"operation": "create_folder",
-			"name":      name,
+			"operation":  "create_folder",
+			"name":       name,
+			"parent_uid": parentUID,
+			"profile":    c.profile,
 		})
-		return "", fmt.Errorf("failed to create folder: %w", err)
+		return "", fmt.Errorf("failed to create folder '%s' under parent '%s': %w", name, parentUID, err)
 	}
 
+	// The KSM SDK for Go might return an empty string for folderUID even on success in some cases (e.g. if the folder already exists with the same name in the same location).
+	// However, for a truly new folder, a UID is expected.
+	if folderUID == "" {
+		// Let's try to find the folder by name under the parent to confirm if it was indeed created or already existed.
+		// This is a workaround for SDK potentially not returning UID consistently on create if it behaves like an upsert.
+		var foundExistingByName = false
+		updatedFolders, listErr := c.sm.GetFolders()
+		if listErr == nil {
+			for _, kf := range updatedFolders {
+				if kf.Name == name && kf.ParentUid == parentUID {
+					folderUID = kf.FolderUid // Found it, use its UID.
+					foundExistingByName = true
+					c.logger.LogSystem(audit.EventAccess, fmt.Sprintf("CreateFolder: KSM SDK returned empty UID for folder '%s', but found existing/newly created folder by name with UID %s.", name, folderUID), map[string]interface{}{})
+					break
+				}
+			}
+		}
+
+		if !foundExistingByName {
+			c.logger.LogSystem(audit.EventError, "CreateFolder: KSM SDK returned empty folderUID without an error, and folder was not found by name.", map[string]interface{}{"name": name, "parent_uid": parentUID, "profile": c.profile})
+			return "", fmt.Errorf("KSM SDK returned an empty UID for new folder '%s' and it could not be subsequently found by name", name)
+		}
+	}
+
+	c.logger.LogSystem(audit.EventAccess, fmt.Sprintf("Folder '%s' (UID: %s) (operation successful or folder already existed) under parent %s", name, folderUID, parentUID), map[string]interface{}{"profile": c.profile})
 	return folderUID, nil
+}
+
+// DeleteFolder deletes a folder by UID, optionally forcing if non-empty.
+func (c *Client) DeleteFolder(uid string, force bool) error {
+	c.logger.LogAccess("folder", "delete", uid, c.profile, true, map[string]interface{}{
+		"force": force,
+	})
+
+	if err := c.validator.ValidateUID(uid); err != nil {
+		return fmt.Errorf("invalid folder UID for delete: %w", err)
+	}
+
+	statuses, err := c.sm.DeleteFolder([]string{uid}, force)
+	if err != nil {
+		c.logger.LogError("ksm", err, map[string]interface{}{
+			"operation":  "delete_folder_sdk_call",
+			"folder_uid": uid,
+			"force":      force,
+			"profile":    c.profile,
+		})
+		return fmt.Errorf("KSM SDK failed to delete folder '%s': %w", uid, err)
+	}
+
+	// Check status for the specific UID
+	status, exists := statuses[uid]
+	if !exists {
+		c.logger.LogSystem(audit.EventError, fmt.Sprintf("DeleteFolder status for UID %s not found in SDK response.", uid), map[string]interface{}{
+			"folder_uid":   uid,
+			"force":        force,
+			"statuses_map": statuses,
+			"profile":      c.profile,
+		})
+		return fmt.Errorf("failed to confirm delete status for folder '%s', UID not in status map: %v", uid, statuses)
+	}
+
+	// Based on DeleteSecret, "success" or "ok" should be fine. SDK might also return empty status on success.
+	if status != "success" && status != "ok" && status != "" {
+		c.logger.LogSystem(audit.EventError, fmt.Sprintf("DeleteFolder status for UID %s was '%s'.", uid, status), map[string]interface{}{
+			"folder_uid": uid,
+			"force":      force,
+			"status":     status,
+			"profile":    c.profile,
+		})
+		return fmt.Errorf("failed to delete folder '%s': KSM reported status '%s'", uid, status)
+	}
+
+	c.logger.LogSystem(audit.EventAccess, fmt.Sprintf("Folder '%s' deleted successfully with status '%s'.", uid, status), map[string]interface{}{
+		"folder_uid": uid,
+		"status":     status,
+		"profile":    c.profile,
+	})
+	return nil
 }
 
 // TestConnection tests the KSM connection

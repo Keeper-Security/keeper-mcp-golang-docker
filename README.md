@@ -553,7 +553,7 @@ This happens when auto-initialization fails. Common causes:
    "-e", "KSM_MCP_BATCH_MODE=true",
    "-e", "KSM_MCP_LOG_LEVEL=error",
    ```
-   - Ensure you have `"--stdio"` in the serve command
+   - Ensure the `serve` command is used (it defaults to stdio mode).
 
 **"Profile not found" error**
 ```bash
