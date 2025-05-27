@@ -269,8 +269,8 @@ func (s *Server) handleSessionEnd(request types.MCPRequest, writer *bufio.Writer
 
 // formatToolResult formats the tool result as a string for the text content
 func formatToolResult(result interface{}) string {
-	// Pretty print JSON for better readability
-	jsonBytes, err := json.MarshalIndent(result, "", "  ")
+	// Minified JSON for faster AI processing and reduced token count
+	jsonBytes, err := json.Marshal(result)
 	if err != nil {
 		// Fallback to simple string conversion
 		return fmt.Sprintf("%v", result)

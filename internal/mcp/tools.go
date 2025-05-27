@@ -372,6 +372,24 @@ func (s *Server) getAvailableTools() []types.MCPTool {
 				"required": []string{"original_tool_name", "original_tool_args_json", "user_decision"},
 			},
 		},
+		{
+			Name:        "get_all_secrets_unmasked",
+			Description: "Get all secrets with complete unmasked data (passwords, custom fields, etc.) in a single operation (requires confirmation)",
+			InputSchema: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"folder_uid": map[string]interface{}{
+						"type":        "string",
+						"description": "Optional: Filter by folder UID",
+					},
+					"fields": map[string]interface{}{
+						"type":        "array",
+						"items":       map[string]interface{}{"type": "string"},
+						"description": "Fields to retrieve for each secret (default: all fields including passwords, login, URL, notes, custom fields)",
+					},
+				},
+			},
+		},
 	}
 }
 
@@ -435,6 +453,8 @@ func (s *Server) executeTool(toolName string, args json.RawMessage) (interface{}
 		return s.executeDeleteFolder(client, args)
 	case "ksm_execute_confirmed_action":
 		return s.executeKsmExecuteConfirmedAction(args)
+	case "get_all_secrets_unmasked":
+		return s.executeGetAllSecretsUnmasked(client, args)
 
 	default:
 		return nil, fmt.Errorf("unknown tool: %s", toolName)
@@ -494,10 +514,14 @@ func (s *Server) executeKsmExecuteConfirmedAction(args json.RawMessage) (interfa
 		return s.executeDeleteSecretConfirmed(client, originalToolArgs)
 	case "upload_file":
 		return s.executeUploadFileConfirmed(client, originalToolArgs)
+	case "download_file":
+		return s.executeDownloadFileConfirmed(client, originalToolArgs)
 	case "create_folder":
 		return s.executeCreateFolderConfirmed(client, originalToolArgs)
 	case "delete_folder":
 		return s.executeDeleteFolderConfirmed(client, originalToolArgs)
+	case "get_all_secrets_unmasked":
+		return s.executeGetAllSecretsUnmaskedConfirmed(client, originalToolArgs)
 
 	// Add other sensitive tools here
 	default:

@@ -268,6 +268,54 @@ func (s *Server) executeGetTOTPCode(client KSMClient, args json.RawMessage) (int
 	return totp, nil
 }
 
+// executeGetAllSecretsUnmasked handles the get_all_secrets_unmasked tool
+func (s *Server) executeGetAllSecretsUnmasked(client KSMClient, args json.RawMessage) (interface{}, error) {
+	var params struct {
+		FolderUID string   `json:"folder_uid,omitempty"`
+		Fields    []string `json:"fields,omitempty"`
+	}
+
+	if err := json.Unmarshal(args, &params); err != nil {
+		return nil, fmt.Errorf("invalid parameters for get_all_secrets_unmasked: %w", err)
+	}
+
+	if s.options.BatchMode || s.options.AutoApprove {
+		s.logSystem(audit.EventAccess, "GetAllSecretsUnmasked: Batch/AutoApprove mode, executing directly", map[string]interface{}{
+			"profile":    s.currentProfile,
+			"folder_uid": params.FolderUID,
+		})
+		return s.executeGetAllSecretsUnmaskedConfirmed(client, args)
+	}
+
+	actionDescription := "Retrieve all secrets with complete unmasked data (passwords, custom fields, etc.)"
+	if params.FolderUID != "" {
+		actionDescription = fmt.Sprintf("Retrieve all secrets with unmasked data from folder %s", params.FolderUID)
+	}
+	warningMessage := "This will expose ALL PASSWORDS and sensitive data from your secrets directly TO THE AI MODEL. This is a bulk operation that could expose a large amount of sensitive information."
+	originalToolArgsJSON := string(args)
+
+	confirmationDetails := map[string]interface{}{
+		"prompt_name": "ksm_confirm_action",
+		"prompt_arguments": map[string]interface{}{
+			"action_description":      actionDescription,
+			"warning_message":         warningMessage,
+			"original_tool_name":      "get_all_secrets_unmasked",
+			"original_tool_args_json": originalToolArgsJSON,
+		},
+	}
+
+	s.logSystem(audit.EventAccess, "GetAllSecretsUnmasked: Confirmation required", map[string]interface{}{
+		"profile":    s.currentProfile,
+		"folder_uid": params.FolderUID,
+	})
+
+	return map[string]interface{}{
+		"status":               "confirmation_required",
+		"message":              fmt.Sprintf("Keeper Secrets Manager requires confirmation to %s. Use the 'ksm_confirm_action' prompt.", actionDescription),
+		"confirmation_details": confirmationDetails,
+	}, nil
+}
+
 // Phase 2 Tool Implementations
 
 // executeCreateSecret handles the create_secret tool
@@ -447,25 +495,51 @@ func (s *Server) executeUploadFile(client KSMClient, args json.RawMessage) (inte
 
 // executeDownloadFile handles the download_file tool
 func (s *Server) executeDownloadFile(client KSMClient, args json.RawMessage) (interface{}, error) {
-	var params struct {
+	var paramsForDesc struct {
 		UID      string `json:"uid"`
 		FileUID  string `json:"file_uid"`
 		SavePath string `json:"save_path,omitempty"`
 	}
-
-	if err := json.Unmarshal(args, &params); err != nil {
-		return nil, fmt.Errorf("invalid parameters: %w", err)
+	if err := json.Unmarshal(args, &paramsForDesc); err != nil {
+		return nil, fmt.Errorf("invalid parameters for download_file: %w", err)
 	}
 
-	if err := client.DownloadFile(params.UID, params.FileUID, params.SavePath); err != nil {
-		return nil, err
+	if s.options.BatchMode || s.options.AutoApprove {
+		s.logSystem(audit.EventAccess, "DownloadFile: Batch/AutoApprove mode, executing directly", map[string]interface{}{
+			"profile":  s.currentProfile,
+			"uid":      paramsForDesc.UID,
+			"file_uid": paramsForDesc.FileUID,
+		})
+		return s.executeDownloadFileConfirmed(client, args)
 	}
+
+	actionDescription := fmt.Sprintf("Download file '%s' from KSM secret (UID: %s)", paramsForDesc.FileUID, paramsForDesc.UID)
+	if paramsForDesc.SavePath != "" {
+		actionDescription += fmt.Sprintf(" to '%s'", paramsForDesc.SavePath)
+	}
+	warningMessage := "This will download a file from your Keeper vault to your local system."
+	originalToolArgsJSON := string(args)
+
+	confirmationDetails := map[string]interface{}{
+		"prompt_name": "ksm_confirm_action",
+		"prompt_arguments": map[string]interface{}{
+			"action_description":      actionDescription,
+			"warning_message":         warningMessage,
+			"original_tool_name":      "download_file",
+			"original_tool_args_json": originalToolArgsJSON,
+		},
+	}
+
+	s.logSystem(audit.EventAccess, "DownloadFile: Confirmation required", map[string]interface{}{
+		"profile":  s.currentProfile,
+		"uid":      paramsForDesc.UID,
+		"file_uid": paramsForDesc.FileUID,
+	})
 
 	return map[string]interface{}{
-		"uid":      params.UID,
-		"file_uid": params.FileUID,
-		"path":     params.SavePath,
-		"message":  "File downloaded successfully",
+		"status":               "confirmation_required",
+		"message":              fmt.Sprintf("Keeper Secrets Manager requires confirmation to %s. Use the 'ksm_confirm_action' prompt.", actionDescription),
+		"confirmation_details": confirmationDetails,
 	}, nil
 }
 
@@ -699,6 +773,54 @@ func (s *Server) executeGetSecretConfirmed(client KSMClient, args json.RawMessag
 	return secret, nil
 }
 
+func (s *Server) executeGetAllSecretsUnmaskedConfirmed(client KSMClient, args json.RawMessage) (interface{}, error) {
+	var params struct {
+		FolderUID string   `json:"folder_uid,omitempty"`
+		Fields    []string `json:"fields,omitempty"`
+	}
+	if err := json.Unmarshal(args, &params); err != nil {
+		return nil, fmt.Errorf("invalid parameters for confirmed get_all_secrets_unmasked: %w", err)
+	}
+
+	s.logSystem(audit.EventAccess, "GetAllSecretsUnmasked: Executing confirmed/batched action", map[string]interface{}{
+		"profile":    s.currentProfile,
+		"folder_uid": params.FolderUID,
+	})
+
+	// Get list of secrets first
+	secrets, err := client.ListSecrets(params.FolderUID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list secrets: %w", err)
+	}
+
+	// Get full details for each secret with passwords unmasked
+	var allSecrets []map[string]interface{}
+	for _, secretMeta := range secrets {
+		secret, err := client.GetSecret(secretMeta.UID, params.Fields, true) // unmask is true
+		if err != nil {
+			// Log error but continue with other secrets
+			s.logError("mcp", err, map[string]interface{}{
+				"operation": "get_all_secrets_unmasked",
+				"uid":       secretMeta.UID,
+				"title":     secretMeta.Title,
+			})
+			// Add error info to result
+			secret = map[string]interface{}{
+				"uid":   secretMeta.UID,
+				"title": secretMeta.Title,
+				"error": fmt.Sprintf("Failed to retrieve: %v", err),
+			}
+		}
+		allSecrets = append(allSecrets, secret)
+	}
+
+	return map[string]interface{}{
+		"secrets": allSecrets,
+		"count":   len(allSecrets),
+		"message": fmt.Sprintf("Retrieved %d secrets with complete unmasked data", len(allSecrets)),
+	}, nil
+}
+
 func (s *Server) executeUpdateSecretConfirmed(client KSMClient, args json.RawMessage) (interface{}, error) {
 	var params types.UpdateSecretParams
 	if err := json.Unmarshal(args, &params); err != nil {
@@ -736,6 +858,34 @@ func (s *Server) executeUploadFileConfirmed(client KSMClient, args json.RawMessa
 		return nil, err
 	}
 	return map[string]interface{}{"uid": paramsForDesc.UID, "file": paramsForDesc.Title, "message": "File uploaded successfully (confirmed)."}, nil
+}
+
+func (s *Server) executeDownloadFileConfirmed(client KSMClient, args json.RawMessage) (interface{}, error) {
+	var params struct {
+		UID      string `json:"uid"`
+		FileUID  string `json:"file_uid"`
+		SavePath string `json:"save_path,omitempty"`
+	}
+	if err := json.Unmarshal(args, &params); err != nil {
+		return nil, fmt.Errorf("invalid parameters for confirmed download_file: %w", err)
+	}
+
+	s.logSystem(audit.EventAccess, "DownloadFile: Executing confirmed/batched action", map[string]interface{}{
+		"profile":  s.currentProfile,
+		"uid":      params.UID,
+		"file_uid": params.FileUID,
+	})
+
+	if err := client.DownloadFile(params.UID, params.FileUID, params.SavePath); err != nil {
+		return nil, err
+	}
+
+	return map[string]interface{}{
+		"uid":      params.UID,
+		"file_uid": params.FileUID,
+		"path":     params.SavePath,
+		"message":  "File downloaded successfully (confirmed).",
+	}, nil
 }
 
 func (s *Server) executeCreateFolderConfirmed(client KSMClient, args json.RawMessage) (interface{}, error) {

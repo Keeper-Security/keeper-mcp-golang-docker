@@ -327,12 +327,3 @@ func (s *Server) logError(source string, err error, details map[string]interface
 		s.logger.LogError(source, err, details)
 	}
 }
-
-func (s *Server) logAccess(resource, action, user string, allowed bool, details map[string]interface{}) {
-	if s.logger != nil {
-		s.logger.LogAccess(resource, action, user, "", allowed, details)
-	}
-}
-
-// handleToolCall processes a tools/call request
-// func (s *Server) handleToolCall(request types.MCPRequest, writer *bufio.Writer) error {

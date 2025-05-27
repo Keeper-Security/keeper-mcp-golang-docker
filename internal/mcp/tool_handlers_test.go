@@ -148,7 +148,7 @@ func TestExecuteCreateSecret(t *testing.T) {
 			validate: func(t *testing.T, result interface{}) {
 				resultMap := result.(map[string]interface{})
 				assert.Equal(t, "confirmation_required", resultMap["status"])
-				assert.Contains(t, resultMap["message"].(string), "Confirmation required to Create new KSM secret titled 'Test Secret C'")
+				assert.Contains(t, resultMap["message"].(string), "Keeper Secrets Manager requires confirmation to Create new KSM secret titled 'Test Secret C'")
 				details, ok := resultMap["confirmation_details"].(map[string]interface{})
 				assert.True(t, ok)
 				assert.Equal(t, "ksm_confirm_action", details["prompt_name"])
