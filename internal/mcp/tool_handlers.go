@@ -733,7 +733,7 @@ func (s *Server) executeCreateSecretConfirmed(client KSMClient, args json.RawMes
 		"message": "Secret created successfully (confirmed).",
 	}
 
-	allWarnings := append(processingWarnings)
+	allWarnings := append([]string{}, processingWarnings...)
 
 	if len(allWarnings) > 0 {
 		response["warnings"] = allWarnings
@@ -832,7 +832,7 @@ func (s *Server) executeUpdateSecretConfirmed(client KSMClient, args json.RawMes
 		"message": "Secret updated successfully (confirmed).",
 	}
 
-	allWarnings := append(processingWarnings)
+	allWarnings := append([]string{}, processingWarnings...)
 
 	if len(allWarnings) > 0 {
 		response["warnings"] = allWarnings
