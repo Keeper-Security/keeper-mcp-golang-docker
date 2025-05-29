@@ -1,33 +1,172 @@
 # KSM MCP Server Configuration Example
-# Copy this file to ~/.config/ksm-mcp/config.yaml and customize as needed
+# Copy this file to ~/.keeper/ksm-mcp/config.yaml and customize as needed
+#
+# Configuration Priority (highest to lowest):
+# 1. Command line flags (--batch, --auto-approve, etc.)
+# 2. Environment variables (KSM_MCP_*)
+# 3. This configuration file
+# 4. Built-in defaults
 
+# =============================================================================
 # MCP Protocol Settings
+# =============================================================================
 mcp:
+  # Request timeout for MCP operations
+  # Default: 30s
+  # Environment: Not directly configurable via env
   timeout: 30s
+  
+  # Rate limiting to protect against abuse
   rate_limit:
+    # Maximum requests per minute per client
+    # Default: 60
+    # Used for: Preventing API abuse and ensuring fair usage
     requests_per_minute: 60
+    
+    # Maximum requests per hour per client
+    # Default: 1000
+    # Used for: Long-term rate limiting and quota management
     requests_per_hour: 1000
 
+# =============================================================================
 # Security Settings
+# =============================================================================
 security:
-  batch_mode: false          # Can be overridden by --batch flag
-  auto_approve: false        # Can be overridden by --auto-approve flag (DANGEROUS)
-  mask_by_default: true      # Mask sensitive fields by default
-  session_timeout: 15m       # How long sessions stay active
-  confirmation_timeout: 30s  # How long to wait for user confirmation
+  # Batch mode - disables interactive prompts
+  # Default: false
+  # Environment: KSM_MCP_BATCH_MODE (true/false)
+  # CLI Flag: --batch
+  # Use case: Automated environments, CI/CD, Docker containers
+  batch_mode: false
+  
+  # Auto-approve all operations without confirmation (DANGEROUS!)
+  # Default: false
+  # Environment: KSM_MCP_AUTO_APPROVE (true/false)
+  # CLI Flag: --auto-approve
+  # WARNING: Only use in trusted, isolated environments
+  auto_approve: false
+  
+  # Mask sensitive fields by default in responses
+  # Default: true
+  # Use case: Prevents accidental exposure of secrets in logs/output
+  # Affects: password, secret, key, token, auth, credential fields
+  mask_by_default: true
+  
+  # How long user sessions remain active without interaction
+  # Default: 15m
+  # Use case: Security timeout for interactive sessions
+  session_timeout: 15m
+  
+  # How long to wait for user confirmation before timing out
+  # Default: 30s
+  # Environment: KSM_MCP_TIMEOUT (duration format: 30s, 1m, etc.)
+  # Use case: Interactive confirmation prompts
+  confirmation_timeout: 30s
+  
+  # Protection password hash for local profile encryption
+  # Default: "" (empty - will be generated on first use)
+  # WARNING: Do not manually edit this field
+  # Use case: Encrypts stored profiles with user-provided password
+  protection_password_hash: ""
 
-# Logging Settings
+# =============================================================================
+# Logging Configuration
+# =============================================================================
 logging:
-  level: info               # debug, info, warn, error
-  file: ~/.config/ksm-mcp/audit.log  # Audit log file location
+  # Log level for application logging
+  # Default: info
+  # Environment: KSM_MCP_LOG_LEVEL
+  # Options: debug, info, warn, error
+  # - debug: Verbose logging for troubleshooting
+  # - info: Standard operational logging
+  # - warn: Warning messages and above
+  # - error: Error messages only
+  level: info
+  
+  # Audit log file location
+  # Default: ~/.keeper/ksm-mcp/audit.log (auto-generated if empty)
+  # Environment: Not directly configurable
+  # Use case: Compliance, security auditing, troubleshooting
+  # Note: Use absolute path or path relative to config directory
+  file: ~/.keeper/ksm-mcp/audit.log
 
-# Profile Settings
+# =============================================================================
+# Profile Management
+# =============================================================================
 profiles:
-  default: production       # Default profile to use if none specified
+  # Default profile to use when none is specified
+  # Default: "default"
+  # Environment: KSM_MCP_PROFILE
+  # CLI Flag: --profile
+  # Use case: Allows switching between different KSM applications/environments
+  default: default
 
-# Environment Variable Overrides:
-# KSM_MCP_CONFIG_DIR      - Config directory location
-# KSM_MCP_PROFILE         - Default profile
-# KSM_MCP_BATCH_MODE      - Enable batch mode (no prompts)
-# KSM_MCP_AUTO_APPROVE    - Auto-approve all operations (DANGEROUS)
-# KSM_MCP_LOG_LEVEL       - Log verbosity
+# =============================================================================
+# Environment Variable Reference
+# =============================================================================
+# The following environment variables can override configuration settings:
+#
+# Core Configuration:
+# - KSM_CONFIG_BASE64           Base64-encoded KSM configuration (bypasses profiles)
+# - KSM_MCP_CONFIG_DIR          Configuration directory (default: ~/.keeper/ksm-mcp)
+# - KSM_MCP_PROFILE             Default profile name to use
+#
+# Security & Behavior:
+# - KSM_MCP_BATCH_MODE          Enable batch mode - no interactive prompts (true/false)
+# - KSM_MCP_AUTO_APPROVE        Auto-approve all operations - DANGEROUS! (true/false)
+# - KSM_MCP_LOG_LEVEL           Log verbosity (debug/info/warn/error)
+#
+# Docker-Specific:
+# - KSM_MCP_LOG_DIR             Log directory for Docker containers
+# - KSM_MCP_PROTECTION_PASSWORD_SECRET_PATH  Path to protection password secret file
+#
+# =============================================================================
+# Usage Examples
+# =============================================================================
+#
+# Development (interactive):
+# - batch_mode: false
+# - auto_approve: false
+# - log_level: debug
+#
+# Production (automated):
+# - batch_mode: true
+# - auto_approve: false (require explicit approval)
+# - log_level: info
+# - session_timeout: 5m (shorter for security)
+#
+# CI/CD (fully automated):
+# - batch_mode: true
+# - auto_approve: true (only in isolated environments!)
+# - log_level: warn
+#
+# High-traffic environments:
+# - requests_per_minute: 120
+# - requests_per_hour: 2000
+# - timeout: 60s
+#
+# =============================================================================
+# Security Best Practices
+# =============================================================================
+#
+# 1. File Permissions:
+#    chmod 600 ~/.keeper/ksm-mcp/config.yaml
+#    chmod 700 ~/.keeper/ksm-mcp/
+#
+# 2. Production Settings:
+#    - Never set auto_approve: true in production
+#    - Use batch_mode: true for automated systems
+#    - Set appropriate session_timeout values
+#    - Monitor audit logs regularly
+#
+# 3. Profile Security:
+#    - Use strong protection passwords
+#    - Regularly rotate KSM application credentials
+#    - Keep profiles encrypted and backed up securely
+#
+# 4. Network Security:
+#    - Adjust rate limits based on expected usage
+#    - Monitor for unusual access patterns
+#    - Use appropriate timeout values for your network
+#
+# =============================================================================

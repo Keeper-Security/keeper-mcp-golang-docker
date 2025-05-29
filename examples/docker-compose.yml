@@ -1,0 +1,59 @@
+# KSM MCP Docker Compose Configuration
+# Choose the configuration that matches your needs
+
+version: '3.8'
+
+services:
+  # Basic setup - just add your base64 config
+  ksm-mcp-basic:
+    image: keepersecurityinc/ksm-mcp-poc:latest
+    environment:
+      - KSM_CONFIG_BASE64=YOUR_BASE64_CONFIG_STRING_HERE
+    volumes:
+      - ~/.keeper/ksm-mcp:/home/ksm/.keeper/ksm-mcp
+    stdin_open: true
+    tty: true
+    profiles: ["basic"]
+
+  # Production setup with additional configuration
+  ksm-mcp-production:
+    image: keepersecurityinc/ksm-mcp-poc:latest
+    environment:
+      - KSM_CONFIG_BASE64=${KSM_CONFIG_BASE64}
+      - KSM_MCP_PROFILE=production
+      - KSM_MCP_BATCH_MODE=true
+      - KSM_MCP_LOG_LEVEL=info
+      - KSM_MCP_LOG_DIR=/var/log/ksm-mcp
+    volumes:
+      - ~/.keeper/ksm-mcp:/home/ksm/.keeper/ksm-mcp
+      - ./logs:/var/log/ksm-mcp
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "ksm-mcp", "health-check"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    profiles: ["production"]
+
+  # Development setup with debug logging
+  ksm-mcp-dev:
+    image: keepersecurityinc/ksm-mcp-poc:latest
+    environment:
+      - KSM_CONFIG_BASE64=${KSM_CONFIG_BASE64}
+      - KSM_MCP_PROFILE=development
+      - KSM_MCP_LOG_LEVEL=debug
+      - KSM_MCP_BATCH_MODE=false
+    volumes:
+      - ~/.keeper/ksm-mcp:/home/ksm/.keeper/ksm-mcp
+      - ./logs:/var/log/ksm-mcp
+    stdin_open: true
+    tty: true
+    profiles: ["dev"]
+
+# Usage:
+# Basic:      docker-compose --profile basic up
+# Production: docker-compose --profile production up -d
+# Development: docker-compose --profile dev up
+
+# For production, create a .env file with:
+# KSM_CONFIG_BASE64=your_actual_base64_config_here 

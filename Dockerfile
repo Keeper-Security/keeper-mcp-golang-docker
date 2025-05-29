@@ -98,7 +98,7 @@ EXPOSE 8080
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["ksm-mcp", "serve"]
 
-# Create a default config file as the ksm user (previously was keeper)
+# Create a default config file as the ksm user
 # This ensures correct permissions and provides a basic working config.
 # The actual KSM credentials/profile will be initialized via `ksm-mcp init` later.
 USER ksm 

@@ -2,39 +2,203 @@ version: '3'
 
 vars:
   BINARY_NAME: ksm-mcp
-  DOCKER_IMAGE: ksm-mcp-local
+  VERSION: '{{default "dev" .VERSION}}'
+  BUILD_DIR: bin
+  DOCKER_IMAGE: keepersecurityinc/ksm-mcp-poc
+  DOCKER_TAG: '{{default "latest" .DOCKER_TAG}}'
+  SRC_DIR: ./cmd/{{.BINARY_NAME}}
+  LDFLAGS: '-ldflags "-X main.version={{.VERSION}} -w -s"'
+  BUILD_FLAGS: '-trimpath {{.LDFLAGS}}'
 
 tasks:
+  default:
+    desc: Default task - clean, format, lint, test, and build
+    cmds:
+      - task: clean
+      - task: fmt
+      - task: lint
+      - task: test
+      - task: build
+
+  # Build tasks
   build:
-    desc: Build binary locally
+    desc: Build the binary
     cmds:
-      - go build -ldflags "-X main.Version={{.VERSION}}" -o {{.BINARY_NAME}} cmd/ksm-mcp/main.go
-      - echo "✓ Binary built - {{.BINARY_NAME}}"
-    vars:
-      VERSION: '{{default "dev" .VERSION}}'
+      - echo "Building {{.BINARY_NAME}} version {{.VERSION}}..."
+      - mkdir -p {{.BUILD_DIR}}
+      - go build {{.BUILD_FLAGS}} -o {{.BUILD_DIR}}/{{.BINARY_NAME}} {{.SRC_DIR}}
+      - echo "Binary built - {{.BUILD_DIR}}/{{.BINARY_NAME}}"
 
-  docker-build:
-    desc: Build Docker image locally  
+  build-all:
+    desc: Build for multiple platforms
+    deps: [clean]
     cmds:
-      - docker build -t {{.DOCKER_IMAGE}}:{{.VERSION}} .
-      - docker tag {{.DOCKER_IMAGE}}:{{.VERSION}} {{.DOCKER_IMAGE}}:latest
-      - echo "✓ Docker image built - {{.DOCKER_IMAGE}}:{{.VERSION}}"
-    vars:
-      VERSION: '{{default "dev" .VERSION}}'
+      - echo "Building for multiple platforms..."
+      - mkdir -p {{.BUILD_DIR}}
+      # Linux amd64
+      - GOOS=linux GOARCH=amd64 go build {{.BUILD_FLAGS}} -o {{.BUILD_DIR}}/{{.BINARY_NAME}}-linux-amd64 {{.SRC_DIR}}
+      # Linux arm64
+      - GOOS=linux GOARCH=arm64 go build {{.BUILD_FLAGS}} -o {{.BUILD_DIR}}/{{.BINARY_NAME}}-linux-arm64 {{.SRC_DIR}}
+      # macOS amd64
+      - GOOS=darwin GOARCH=amd64 go build {{.BUILD_FLAGS}} -o {{.BUILD_DIR}}/{{.BINARY_NAME}}-darwin-amd64 {{.SRC_DIR}}
+      # macOS arm64
+      - GOOS=darwin GOARCH=arm64 go build {{.BUILD_FLAGS}} -o {{.BUILD_DIR}}/{{.BINARY_NAME}}-darwin-arm64 {{.SRC_DIR}}
+      # Windows amd64
+      - GOOS=windows GOARCH=amd64 go build {{.BUILD_FLAGS}} -o {{.BUILD_DIR}}/{{.BINARY_NAME}}-windows-amd64.exe {{.SRC_DIR}}
+      - echo "Multi-platform builds completed"
 
-  docker-run:
-    desc: Run Docker image
-    deps: [docker-build]
+  # Clean tasks
+  clean:
+    desc: Clean build artifacts
     cmds:
-      - docker run -it --rm {{.DOCKER_IMAGE}}:latest --help
+      - echo "Cleaning..."
+      - go clean
+      - rm -rf {{.BUILD_DIR}}
+      - rm -rf dist/
+      - rm -f coverage.out coverage.html
+
+  # Test tasks
+  test:
+    desc: Run tests
+    cmds:
+      - echo "Running tests..."
+      - go test -v ./...
+
+  test-coverage:
+    desc: Run tests with coverage
+    cmds:
+      - echo "Running tests with coverage..."
+      - go test -race -coverprofile=coverage.out -covermode=atomic ./...
+      - go tool cover -html=coverage.out -o coverage.html
+      - echo "Coverage report generated - coverage.html"
+
+  test-race:
+    desc: Run tests with race detection
+    cmds:
+      - echo "Running tests with race detection..."
+      - go test -race ./...
 
   test-local:
-    desc: Test Docker image
+    desc: Test Docker image locally
     deps: [docker-build]
     cmds:
       - echo "Testing Docker image..."
-      - docker run --rm -e KSM_CONFIG_BASE64=dGVzdA== -e KSM_MCP_PROFILE=production -e KSM_MCP_BATCH_MODE=true {{.DOCKER_IMAGE}}:latest serve --batch 2>&1 | head -20 || true
+      - docker run --rm -e KSM_CONFIG_BASE64=dGVzdA== -e KSM_MCP_PROFILE=production -e KSM_MCP_BATCH_MODE=true {{.DOCKER_IMAGE}}:{{.DOCKER_TAG}} serve --batch 2>&1 | head -20 || true
 
+  # Code quality tasks
+  lint:
+    desc: Run linter
+    cmds:
+      - echo "Running linter..."
+      - |
+        if ! command -v golangci-lint &> /dev/null; then
+          echo "Installing golangci-lint..."
+          go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+        fi
+      - golangci-lint run
+
+  fmt:
+    desc: Format code
+    cmds:
+      - echo "Formatting code..."
+      - go fmt ./...
+
+  security:
+    desc: Run security scan
+    cmds:
+      - echo "Running security scan..."
+      - |
+        if ! command -v gosec &> /dev/null; then
+          echo "Installing gosec..."
+          go install github.com/securecodewarrior/gosec/v2/cmd/gosec@latest
+        fi
+      - gosec ./...
+
+  # Dependency tasks
+  deps:
+    desc: Install dependencies
+    cmds:
+      - echo "Installing dependencies..."
+      - go mod download
+      - go mod tidy
+
+  deps-update:
+    desc: Update dependencies
+    cmds:
+      - echo "Updating dependencies..."
+      - go get -u ./...
+      - go mod tidy
+
+  deps-verify:
+    desc: Verify dependencies
+    cmds:
+      - echo "Verifying dependencies..."
+      - go mod verify
+
+  # Docker tasks
+  docker-build:
+    desc: Build Docker image
+    cmds:
+      - echo "Building Docker image..."
+      - docker build -t {{.DOCKER_IMAGE}}:{{.DOCKER_TAG}} .
+      - docker tag {{.DOCKER_IMAGE}}:{{.DOCKER_TAG}} {{.DOCKER_IMAGE}}:latest
+      - echo "Docker image built - {{.DOCKER_IMAGE}}:{{.DOCKER_TAG}}"
+
+  docker-run:
+    desc: Run Docker container
+    cmds:
+      - docker run -it --rm -v ~/.keeper/ksm-mcp:/home/ksm/.keeper/ksm-mcp {{.DOCKER_IMAGE}}:{{.DOCKER_TAG}}
+
+  docker-push:
+    desc: Build and push Docker image to Docker Hub
+    deps: [docker-build]
+    cmds:
+      - echo "Pushing Docker image to Docker Hub..."
+      - docker push {{.DOCKER_IMAGE}}:{{.DOCKER_TAG}}
+      - |
+        if [ "{{.DOCKER_TAG}}" != "latest" ]; then
+          docker tag {{.DOCKER_IMAGE}}:{{.DOCKER_TAG}} {{.DOCKER_IMAGE}}:latest
+          docker push {{.DOCKER_IMAGE}}:latest
+        fi
+
+  docker-push-multi:
+    desc: Build and push multi-platform Docker image
+    cmds:
+      - echo "Building and pushing multi-platform Docker image..."
+      - docker buildx create --use --name ksm-mcp-builder || true
+      - docker buildx build --platform linux/amd64,linux/arm64 -t {{.DOCKER_IMAGE}}:{{.DOCKER_TAG}} -t {{.DOCKER_IMAGE}}:latest --push .
+      - docker buildx rm ksm-mcp-builder
+
+  # Installation tasks
+  install:
+    desc: Install binary to local system
+    deps: [build]
+    cmds:
+      - echo "Installing {{.BINARY_NAME}} to /usr/local/bin..."
+      - sudo cp {{.BUILD_DIR}}/{{.BINARY_NAME}} /usr/local/bin/
+
+  uninstall:
+    desc: Uninstall binary from local system
+    cmds:
+      - echo "Removing {{.BINARY_NAME}} from /usr/local/bin..."
+      - sudo rm -f /usr/local/bin/{{.BINARY_NAME}}
+
+  # Run tasks
+  run:
+    desc: Build and run the application
+    deps: [build]
+    cmds:
+      - ./{{.BUILD_DIR}}/{{.BINARY_NAME}}
+
+  quick:
+    desc: Quick build and run
+    cmds:
+      - task: docker-build
+        vars:
+          DOCKER_TAG: "{{.DOCKER_TAG}}"
+      - task: docker-run
+
+  # Claude configuration helper
   test-claude:
     desc: Show Claude config for local testing
     cmds:
@@ -45,7 +209,7 @@ tasks:
         echo ""
         echo '{'
         echo '  "mcpServers": {'
-        echo '    "ksm-local": {'
+        echo '    "ksm": {'
         echo '      "command": "docker",'
         echo '      "args": ['
         echo '        "run", "-i", "--rm",'
@@ -54,7 +218,7 @@ tasks:
         echo '        "-e", "KSM_MCP_BATCH_MODE=true",'
         echo '        "-e", "KSM_MCP_LOG_LEVEL=error",'
         echo '        "-v", "ksm-mcp-data:/home/ksm/.keeper/ksm-mcp",'
-        echo '        "{{.DOCKER_IMAGE}}:latest",'
+        echo '        "{{.DOCKER_IMAGE}}:{{.DOCKER_TAG}}",'
         echo '        "serve"'
         echo '      ]'
         echo '    }'
@@ -63,19 +227,8 @@ tasks:
         echo ""
         echo "Note: Replace YOUR_BASE64_CONFIG_HERE with your actual config"
 
-  clean:
-    desc: Clean artifacts
+  # Help task
+  help:
+    desc: Show available tasks
     cmds:
-      - rm -f {{.BINARY_NAME}}
-
-  fmt:
-    desc: Format code
-    cmds:
-      - go fmt ./...
-
-  quick:
-    desc: Quick build and run
-    cmds:
-      - task: docker-build
-        vars: {VERSION: "{{.VERSION}}"}
-      - task: docker-run
+      - task --list

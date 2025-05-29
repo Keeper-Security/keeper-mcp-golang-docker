@@ -190,6 +190,8 @@ The KSM MCP server can be instantiated in multiple ways with various configurati
 
 #### Method 5: Silent Mode (No Local Logs)
 
+For environments where you want to prevent any local file creation (including audit logs):
+
 ```json
 {
   "mcpServers": {
@@ -204,6 +206,12 @@ The KSM MCP server can be instantiated in multiple ways with various configurati
   }
 }
 ```
+
+The `--no-logs` flag completely disables audit logging, ensuring no local files are created. This is useful for:
+- Compliance environments where local file creation must be avoided
+- Containerized deployments where persistence isn't desired
+- Temporary or testing scenarios
+- Systems with read-only filesystems
 
 ### Command Line Flags
 
@@ -229,6 +237,20 @@ The KSM MCP server can be instantiated in multiple ways with various configurati
   - Skips password prompts when loading encrypted profiles
   - Uses environment variables or CLI flags for all configuration
   - Fails gracefully if required input is missing instead of hanging
+
+**`--no-logs` (Silent Mode)**
+- **Purpose**: Completely disables audit logging to prevent any local file creation
+- **When to use**:
+  - Compliance environments where local artifacts must be avoided
+  - Containerized or ephemeral deployments
+  - Read-only filesystem environments
+  - Testing scenarios where cleanup is important
+- **What it does**:
+  - Prevents creation of `~/.keeper/ksm-mcp/logs/` directory
+  - Disables all audit logging (access logs, error logs, system logs)
+  - Maintains full MCP functionality without logging overhead
+  - Safe operation with nil-check wrappers for all logging calls
+- **Security**: High - no sensitive data written to local files
 
 **`--auto-approve` (Dangerous)**
 - **Purpose**: Bypasses user confirmation prompts for destructive operations
