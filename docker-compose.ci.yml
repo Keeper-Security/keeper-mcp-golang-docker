@@ -1,0 +1,16 @@
+# KSM MCP Docker Compose Configuration for CI Testing
+# Note: KSM_CONFIG_BASE64 contains fake test credentials for CI testing only
+# Decoded content: {"clientId": "test-client-id", "appKey": "test-app-key", "privateKey": "test-private-key", "hostname": "test.keepersecurity.com"}
+services:
+  ksm-mcp:
+    image: ksm-mcp:ci-test
+    container_name: ksm-mcp-test
+    environment:
+      - KSM_MCP_CONFIG_DIR=/home/keeper/.keeper/ksm-mcp
+      - KSM_MCP_LOG_LEVEL=debug
+      - KSM_MCP_BATCH_MODE=true
+      # Fake test credentials - not real KSM config
+      - KSM_CONFIG_BASE64=ewogICJjbGllbnRJZCI6ICJ0ZXN0LWNsaWVudC1pZCIsCiAgImFwcEtleSI6ICJ0ZXN0LWFwcC1rZXkiLAogICJwcml2YXRlS2V5IjogInRlc3QtcHJpdmF0ZS1rZXkiLAogICJob3N0bmFtZSI6ICJ0ZXN0Lmtlc2VwZXJzZWN1cml0eS5jb20iCn0=
+    stdin_open: true
+    tty: true
+    command: serve --batch --auto-approve 
