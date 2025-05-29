@@ -30,9 +30,10 @@ tasks:
       - echo "Binary built - {{.BUILD_DIR}}/{{.BINARY_NAME}}"
 
   build-all:
-    desc: Build for multiple platforms
-    deps: [clean]
+    desc: Build for multiple platforms with quality checks
     cmds:
+      - task: clean
+      - task: quality
       - echo "Building for multiple platforms..."
       - mkdir -p {{.BUILD_DIR}}
       # Linux amd64
@@ -45,7 +46,11 @@ tasks:
       - GOOS=darwin GOARCH=arm64 go build {{.BUILD_FLAGS}} -o {{.BUILD_DIR}}/{{.BINARY_NAME}}-darwin-arm64 {{.SRC_DIR}}
       # Windows amd64
       - GOOS=windows GOARCH=amd64 go build {{.BUILD_FLAGS}} -o {{.BUILD_DIR}}/{{.BINARY_NAME}}-windows-amd64.exe {{.SRC_DIR}}
-      - echo "Multi-platform builds completed"
+      # Windows arm64
+      - GOOS=windows GOARCH=arm64 go build {{.BUILD_FLAGS}} -o {{.BUILD_DIR}}/{{.BINARY_NAME}}-windows-arm64.exe {{.SRC_DIR}}
+      - echo "✅ Multi-platform build completed with quality checks!"
+      - echo "Built binaries:"
+      - ls -la {{.BUILD_DIR}}/
 
   # Clean tasks
   clean:
@@ -57,6 +62,25 @@ tasks:
       - rm -rf dist/
       - rm -f coverage.out coverage.html
 
+  # Quality assurance tasks
+  quality:
+    desc: Run all quality checks (tests, lint, security)
+    cmds:
+      - task: test-coverage
+      - task: lint
+      - task: security
+      - echo "✅ All quality checks passed!"
+
+  ci:
+    desc: Run CI pipeline locally (mirrors GitHub Actions)
+    cmds:
+      - echo "🚀 Running CI pipeline locally..."
+      - task: test-coverage
+      - task: lint
+      - task: security
+      - task: build-all
+      - echo "✅ CI pipeline completed successfully!"
+
   # Test tasks
   test:
     desc: Run tests
@@ -65,12 +89,12 @@ tasks:
       - go test -v ./...
 
   test-coverage:
-    desc: Run tests with coverage
+    desc: Run tests with coverage (matches CI)
     cmds:
-      - echo "Running tests with coverage..."
-      - go test -race -coverprofile=coverage.out -covermode=atomic ./...
-      - go tool cover -html=coverage.out -o coverage.html
-      - echo "Coverage report generated - coverage.html"
+      - echo "Running tests with coverage and race detection..."
+      - go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+      - go tool cover -func=coverage.out
+      - echo "✅ Tests passed with coverage report"
 
   test-race:
     desc: Run tests with race detection
@@ -87,15 +111,21 @@ tasks:
 
   # Code quality tasks
   lint:
-    desc: Run linter
+    desc: Run linter (matches CI)
     cmds:
-      - echo "Running linter..."
+      - echo "Running golangci-lint..."
       - |
         if ! command -v golangci-lint &> /dev/null; then
           echo "Installing golangci-lint..."
           go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
         fi
-      - golangci-lint run
+      - |
+        if command -v golangci-lint &> /dev/null; then
+          golangci-lint run --timeout=5m
+        else
+          ~/go/bin/golangci-lint run --timeout=5m
+        fi
+      - echo "✅ Linting passed"
 
   fmt:
     desc: Format code
@@ -104,15 +134,21 @@ tasks:
       - go fmt ./...
 
   security:
-    desc: Run security scan
+    desc: Run security scan (matches CI)
     cmds:
-      - echo "Running security scan..."
+      - echo "Running gosec security scanner..."
       - |
         if ! command -v gosec &> /dev/null; then
           echo "Installing gosec..."
-          go install github.com/securecodewarrior/gosec/v2/cmd/gosec@latest
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
         fi
-      - gosec ./...
+      - |
+        if command -v gosec &> /dev/null; then
+          gosec ./...
+        else
+          ~/go/bin/gosec ./...
+        fi
+      - echo "✅ Security scan passed"
 
   # Dependency tasks
   deps:

@@ -1,6 +1,6 @@
 # KSM MCP Server - Secure AI Access to Keeper Secrets
 
-KSM MCP is a Model Context Protocol (MCP) server that acts as a secure intermediary between AI language models (like Claude) and Keeper Secrets Manager (KSM). It allows AI agents to manage your KSM secrets—such as listing, creating, retrieving, and deleting records and folders—while protecting your KSM application credentials. Sensitive operations require user confirmation, ensuring you maintain control over your data.
+KSM MCP is a Model Context Protocol (MCP) server that acts as a secure intermediary between AI language models (like Claude) and Keeper Secrets Manager (KSM). It allows AI agents to manage your KSM secrets-such as listing, creating, retrieving, and deleting records and folders-while protecting your KSM application credentials. Sensitive operations require user confirmation, ensuring you maintain control over your data.
 
 ## Quick User Guide
 
