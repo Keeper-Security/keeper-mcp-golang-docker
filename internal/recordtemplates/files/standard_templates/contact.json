@@ -1,0 +1,27 @@
+{
+  "$id": "contact",
+  "categories": ["address"],
+  "description": "Contact template",
+  "fields": [
+    {
+      "$ref": "name",
+      "required": true
+    },
+    {
+      "$ref": "text",
+      "label": "company"
+    },
+    {
+      "$ref": "email"
+    },
+    {
+      "$ref": "phone"
+    },
+    {
+      "$ref": "addressRef"
+    },
+    {
+      "$ref": "fileRef"
+    }
+  ]
+}

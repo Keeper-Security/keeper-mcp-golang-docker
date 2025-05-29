@@ -1,0 +1,16 @@
+{
+  "$id": "encryptedNotes",
+  "categories": ["note"],
+  "description": "Encrypted note template",
+  "fields": [
+    {
+      "$ref": "note"
+    },
+    {
+      "$ref": "date"
+    },
+    {
+      "$ref": "fileRef"
+    }
+  ]
+}

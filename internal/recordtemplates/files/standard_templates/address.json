@@ -1,0 +1,13 @@
+{
+  "$id": "address",
+  "categories": ["address"],
+  "description": "Address template",
+  "fields": [
+    {
+      "$ref": "address"
+    },
+    {
+      "$ref": "fileRef"
+    }
+  ]
+}

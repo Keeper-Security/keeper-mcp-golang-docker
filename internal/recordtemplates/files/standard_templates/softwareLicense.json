@@ -1,0 +1,20 @@
+{
+  "$id": "softwareLicense",
+  "categories": ["note"],
+  "description": "Software license template",
+  "fields": [
+    {
+      "$ref": "licenseNumber"
+    },
+    {
+      "$ref": "expirationDate"
+    },
+    {
+      "$ref": "date",
+      "label": "dateActive"
+    },
+    {
+      "$ref": "fileRef"
+    }
+  ]
+}

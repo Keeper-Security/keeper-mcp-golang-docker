@@ -1,0 +1,19 @@
+{
+  "$id": "membership",
+  "categories": ["ids"],
+  "description": "Membership template",
+  "fields": [
+    {
+      "$ref": "accountNumber"
+    },
+    {
+      "$ref": "name"
+    },
+    {
+      "$ref": "password"
+    },
+    {
+      "$ref": "fileRef"
+    }
+  ]
+}

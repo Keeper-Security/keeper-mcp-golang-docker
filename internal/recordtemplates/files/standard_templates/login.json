@@ -1,0 +1,25 @@
+{
+  "$id": "login",
+  "categories": ["login"],
+  "description": "Login template",
+  "fields": [
+    {
+      "$ref": "passkey"
+    },
+    {
+      "$ref": "login"
+    },
+    {
+      "$ref": "password"
+    },
+    {
+      "$ref": "url"
+    },
+    {
+      "$ref": "fileRef"
+    },
+    {
+      "$ref": "oneTimeCode"
+    }
+  ]
+}

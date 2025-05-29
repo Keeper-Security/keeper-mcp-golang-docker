@@ -1,0 +1,45 @@
+{
+	"$id": "pamMachine",
+	"fields": [
+		{
+			"$ref": "pamHostname",
+			"required": true
+		},
+    {
+      "$ref": "pamSettings"
+    },
+    {
+      "$ref": "trafficEncryptionSeed"
+    },
+		{
+			"$ref": "script",
+			"label": "rotationScripts"
+		},
+		{
+			"$ref": "text",
+			"label": "operatingSystem"
+		},
+		{
+			"$ref": "text",
+			"label": "instanceName"
+		},
+		{
+			"$ref": "text",
+			"label": "instanceId"
+		},
+		{
+			"$ref": "text",
+			"label": "providerGroup"
+		},
+		{
+			"$ref": "text",
+			"label": "providerRegion"
+		},
+		{
+			"$ref": "fileRef"
+		},
+		{
+			"$ref": "oneTimeCode"
+		}
+	]
+}

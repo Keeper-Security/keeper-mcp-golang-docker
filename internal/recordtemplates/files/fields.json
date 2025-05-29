@@ -1,0 +1,195 @@
+[
+  {
+    "$id": "title",
+    "type": "text"
+  },
+  {
+    "$id": "login",
+    "type": "login",
+    "lookup": "login"
+  },
+  {
+    "$id": "password",
+    "type": "password"
+  },
+  {
+    "$id": "name",
+    "type": "name",
+    "lookup": "name"
+  },
+  {
+    "$id": "company",
+    "type": "text",
+    "lookup": "company"
+  },
+  {
+    "$id": "phone",
+    "type": "phone",
+    "multiple": "optional",
+    "lookup": "phone"
+  },
+  {
+    "$id": "email",
+    "type": "email",
+    "multiple": "optional",
+    "lookup": "email"
+  },
+  {
+    "$id": "address",
+    "type": "address"
+  },
+  {
+    "$id": "addressRef",
+    "type": "addressRef",
+    "lookup": "addressRef"
+  },
+  {
+    "$id": "cardNumber",
+    "type": "cardNumber"
+  },
+  {
+    "$id": "date",
+    "type": "date"
+  },
+  {
+    "$id": "expirationDate",
+    "type": "date"
+  },
+  {
+    "$id": "birthDate",
+    "type": "date"
+  },
+  {
+    "$id": "paymentCard",
+    "type": "paymentCard"
+  },
+  {
+    "$id": "accountNumber",
+    "type": "text",
+    "lookup": "accountNumber"
+  },
+  {
+    "$id": "groupNumber",
+    "type": "text"
+  },
+  {
+    "$id": "bankAccount",
+    "type": "bankAccount",
+    "lookup": "accountNumber"
+  },
+  {
+    "$id": "cardRef",
+    "type": "cardRef",
+    "lookup": "bankCard",
+    "multiple": "default"
+  },
+  {
+    "$id": "note",
+    "type": "multiline"
+  },
+  {
+    "$id": "url",
+    "type": "url",
+    "multiple": "optional"
+  },
+  {
+    "$id": "photo",
+    "type": "file"
+  },
+  {
+    "$id": "file",
+    "type": "file"
+  },
+  {
+    "$id": "fileRef",
+    "type": "fileRef",
+    "multiple": "default"
+  },
+  {
+    "$id": "host",
+    "type": "host",
+    "lookup": "host",
+    "multiple": "optional"
+  },
+  {
+    "$id": "securityQuestion",
+    "type": "securityQuestion",
+    "multiple": "default"
+  },
+  {
+    "$id": "pinCode",
+    "type": "secret"
+  },
+  {
+    "$id": "oneTimeCode",
+    "type": "otp"
+  },
+  {
+    "$id": "keyPair",
+    "type": "privateKey"
+  },
+  {
+    "$id": "licenseNumber",
+    "type": "multiline"
+  },
+  {
+    "$id": "isSSIDHidden",
+    "type": "checkbox"
+  },
+  {
+    "$id": "wifiEncryption",
+    "type": "dropdown"
+  },
+  {
+    "$id": "recordRef",
+    "type": "recordRef",
+    "multiple": "default"
+  },
+  {
+    "$id": "schedule",
+    "type": "schedule"
+  },
+  {
+    "$id": "directoryType",
+    "type": "dropdown"
+  },
+  {
+    "$id": "databaseType",
+    "type": "dropdown"
+  },
+  { "$id": "pamHostname",
+  	"type": "pamHostname"
+  },
+  {
+    "$id": "rbiUrl",
+    "type": "text"
+  },
+  {
+    "$id": "script",
+    "type": "script"
+  },
+  {
+    "$id": "secret",
+    "type": "secret"
+  },
+  {
+    "$id": "text",
+    "type": "text"
+  },
+  {
+    "$id": "checkbox",
+    "type": "checkbox"
+  },
+  {
+    "$id": "pamSettings",
+    "type": "pamSettings"
+  },
+  {
+    "$id": "trafficEncryptionSeed",
+    "type": "trafficEncryptionSeed"
+  },
+  {
+    "$id": "pamRemoteBrowserSettings",
+    "type": "pamRemoteBrowserSettings"
+  }
+]

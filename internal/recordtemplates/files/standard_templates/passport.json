@@ -1,0 +1,34 @@
+{
+  "$id": "passport",
+  "categories": ["ids"],
+  "description": "Passport template",
+  "fields": [
+    {
+      "$ref": "accountNumber",
+      "label": "passportNumber"
+    },
+    {
+      "$ref": "name"
+    },
+    {
+      "$ref": "birthDate"
+    },
+    {
+      "$ref": "addressRef"
+    },
+    {
+      "$ref": "expirationDate"
+    },
+    {
+      "$ref": "date",
+      "label": "dateIssued"
+    },
+    {
+      "$ref": "password"
+    },
+    {
+      "$ref": "fileRef"
+    }
+  ]
+
+}

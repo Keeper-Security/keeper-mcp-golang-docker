@@ -1,0 +1,10 @@
+{
+  "$id": "photo",
+  "categories": ["file"],
+  "description": "Photo template",
+  "fields": [
+    {
+      "$ref": "fileRef"
+    }
+  ]
+}

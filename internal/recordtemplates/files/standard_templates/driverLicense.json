@@ -1,0 +1,27 @@
+{
+  "$id": "driverLicense",
+  "categories": ["ids"],
+  "description": "Driver license template",
+  "fields": [
+    {
+      "$ref": "accountNumber",
+      "label": "dlNumber"
+    },
+    {
+      "$ref": "name"
+    },
+    {
+      "$ref": "birthDate"
+    },
+    {
+      "$ref": "addressRef"
+    },
+    {
+      "$ref": "expirationDate"
+    },
+    {
+      "$ref": "fileRef"
+    }
+  ]
+
+}

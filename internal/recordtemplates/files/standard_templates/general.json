@@ -1,0 +1,22 @@
+{
+  "$id": "general",
+  "categories": ["login"],
+  "description": "Legacy template",
+  "fields": [
+    {
+      "$ref": "login"
+    },
+    {
+      "$ref": "password"
+    },
+    {
+      "$ref": "url"
+    },
+    {
+      "$ref": "oneTimeCode"
+    },
+    {
+      "$ref": "fileRef"
+    }
+  ]
+}

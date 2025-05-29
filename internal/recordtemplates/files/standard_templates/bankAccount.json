@@ -1,0 +1,32 @@
+{
+  "$id": "bankAccount",
+  "description": "Bank account template",
+  "fields":[
+    {
+      "$ref": "bankAccount",
+      "required": true
+    },
+    {
+      "$ref": "name"
+    },
+    {
+      "$ref": "login"
+    },
+    {
+      "$ref": "password"
+    },
+    {
+      "$ref": "url"
+    },
+    {
+      "$ref": "cardRef"
+    },
+    {
+      "$ref": "fileRef"
+    },
+    {
+      "$ref": "oneTimeCode"
+    }
+  ]
+}
+

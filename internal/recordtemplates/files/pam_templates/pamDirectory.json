@@ -1,0 +1,57 @@
+{
+	"$id": "pamDirectory",
+	"fields": [
+		{
+			"$ref": "pamHostname"
+		},
+		{
+			"$ref": "checkbox",
+			"label": "useSSL",
+			"default": true
+		},
+    {
+      "$ref": "pamSettings"
+    },
+    {
+      "$ref": "trafficEncryptionSeed"
+    },
+		{
+			"$ref": "script",
+			"label": "rotationScripts"
+		},
+		{
+			"$ref": "text",
+			"label": "domainName"
+		},
+		{
+			"$ref": "multiline",
+			"label": "alternativeIPs"
+		},
+		{
+			"$ref": "text",
+			"label": "directoryId"
+		},
+		{
+			"$ref": "directoryType",
+			"default": "Active Directory"
+		},
+		{
+			"$ref": "text",
+			"label": "userMatch"
+		},
+		{
+			"$ref": "text",
+			"label": "providerGroup"
+		},
+		{
+			"$ref": "text",
+			"label": "providerRegion"
+		},
+		{
+			"$ref": "fileRef"
+		},
+		{
+			"$ref": "oneTimeCode"
+		}
+	]
+}

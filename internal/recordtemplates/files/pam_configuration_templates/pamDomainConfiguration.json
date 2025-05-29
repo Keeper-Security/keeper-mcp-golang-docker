@@ -1,0 +1,47 @@
+{
+	"$id": "pamDomainConfiguration",
+	"fields": [
+		{
+			"$ref": "pamResources",
+			"label": "",
+			"required": true
+		},
+		{
+			"$ref": "schedule",
+			"label": "defaultRotationSchedule",
+			"required": true
+		},
+		{
+			"$ref": "pamHostname"
+		},
+		{
+			"$ref": "text",
+			"label": "pamDomainId"
+		},
+		{
+			"$ref": "checkbox",
+			"label": "useSSL",
+			"default": true
+		},
+		{
+			"$ref": "checkbox",
+			"label": "scanDCCIDR",
+			"default": false
+		},
+		{
+			"$ref": "text",
+			"label": "networkCIDR"
+		},
+		{
+			"$ref": "multiline",
+			"label": "portMapping"
+		},
+		{
+			"$ref": "script",
+			"label": "rotationScripts"
+		},
+		{
+			"$ref": "fileRef"
+		}
+	]
+}

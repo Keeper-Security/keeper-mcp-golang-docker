@@ -1,0 +1,55 @@
+{
+	"$id": "pamAzureConfiguration",
+	"fields": [
+    {
+			"$ref": "pamResources",
+			"label": "",
+			"required": true
+		},
+		{
+			"$ref": "schedule",
+			"label": "defaultRotationSchedule",
+			"required": true
+		},
+		{
+			"$ref": "text",
+			"label": "azureId",
+			"required": true
+		},
+		{
+			"$ref": "secret",
+			"label": "clientId",
+			"required": true
+		},
+		{
+			"$ref": "secret",
+			"label": "clientSecret",
+			"required": true
+		},
+		{
+			"$ref": "secret",
+			"label": "subscriptionId",
+			"required": true
+		},
+		{
+			"$ref": "secret",
+			"label": "tenantId",
+			"required": true
+		},
+		{
+			"$ref": "multiline",
+			"label": "resourceGroups"
+		},
+		{
+			"$ref": "multiline",
+			"label": "portMapping"
+		},
+		{
+			"$ref": "script",
+			"label": "rotationScripts"
+		},		
+		{
+			"$ref": "fileRef"
+		}
+	]
+}

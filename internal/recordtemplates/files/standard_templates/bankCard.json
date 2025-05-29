@@ -1,0 +1,23 @@
+{
+  "$id": "bankCard",
+  "categories": ["payment"],
+  "description": "Bank card template",
+  "fields": [
+    {
+      "$ref": "paymentCard"
+    },
+    {
+      "$ref": "text",
+      "label": "cardholderName"
+    },
+    {
+      "$ref": "pinCode"
+    },
+    {
+      "$ref": "addressRef"
+    },
+    {
+      "$ref": "fileRef"
+    }
+  ]
+}

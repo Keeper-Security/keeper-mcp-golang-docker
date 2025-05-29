@@ -43,6 +43,7 @@ Thumbs.db
 *.json
 !*example*.json
 !*template*.json
+!internal/recordtemplates/**/*.json
 
 # Log files
 *.log

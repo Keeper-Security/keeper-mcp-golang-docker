@@ -1,0 +1,17 @@
+{
+  "$id": "ssnCard",
+  "categories": ["ids"],
+  "description": "Identity card template",
+  "fields": [
+    {
+      "$ref": "accountNumber",
+      "label": "identityNumber"
+    },
+    {
+      "$ref": "name"
+    },
+    {
+      "$ref": "fileRef"
+    }
+  ]
+}

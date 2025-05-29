@@ -1,0 +1,43 @@
+{
+	"$id": "pamAwsConfiguration",
+	"fields": [
+    {
+			"$ref": "pamResources",
+			"label": "",
+			"required": true
+		},
+		{
+			"$ref": "schedule",
+			"label": "defaultRotationSchedule",
+			"required": true
+		},
+		{
+			"$ref": "text",
+			"label": "awsId",
+			"required": true
+		},
+		{
+			"$ref": "secret",
+			"label": "accessKeyId"
+		},
+		{
+			"$ref": "secret",
+			"label": "accessSecretKey"
+		},
+		{
+			"$ref": "multiline",
+			"label": "regionNames"
+		},
+		{
+			"$ref": "multiline",
+			"label": "portMapping"
+		},
+		{
+			"$ref": "script",
+			"label": "rotationScripts"
+		},		
+		{
+			"$ref": "fileRef"
+		}
+	]
+}

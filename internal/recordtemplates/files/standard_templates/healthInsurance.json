@@ -1,0 +1,26 @@
+{
+  "$id": "healthInsurance",
+  "categories": ["ids"],
+  "description": "Health insurance template",
+  "fields": [
+    {
+      "$ref": "accountNumber"
+    },
+    {
+      "$ref": "name",
+      "label": "insuredsName"
+    },
+    {
+      "$ref": "login"
+    },
+    {
+      "$ref": "password"
+    },
+    {
+      "$ref": "url"
+    },
+    {
+      "$ref": "fileRef"
+    }
+  ]
+}

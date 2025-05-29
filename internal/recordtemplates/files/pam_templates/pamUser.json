@@ -1,0 +1,38 @@
+{
+	"$id": "pamUser",
+	"fields": [
+		{
+			"$ref": "login",
+			"required": true
+		},
+		{
+			"$ref": "password"
+		},
+		{
+			"$ref": "script",
+			"label": "rotationScripts"
+		},
+		{
+			"$ref": "secret",
+			"label": "privatePEMKey"
+		},
+		{
+			"$ref": "text",
+			"label": "distinguishedName"
+		},
+		{
+			"$ref": "text",
+			"label": "connectDatabase"
+		},
+		{
+			"$ref": "checkbox",
+			"label": "managed"
+		},
+		{
+			"$ref": "fileRef"
+		},
+		{
+			"$ref": "oneTimeCode"
+		}
+	]
+}

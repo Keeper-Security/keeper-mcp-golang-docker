@@ -1,0 +1,34 @@
+{
+	"$id": "pamNetworkConfiguration",
+	"fields": [
+    {
+			"$ref": "pamResources",
+			"label": "",
+			"required": true
+		},
+		{
+			"$ref": "schedule",
+			"label": "defaultRotationSchedule",
+			"required": true
+		},
+		{
+			"$ref": "text",
+			"label": "networkId"
+		},
+		{
+			"$ref": "text",
+			"label": "networkCIDR"
+		},
+		{
+			"$ref": "multiline",
+			"label": "portMapping"
+		},
+		{
+			"$ref": "script",
+			"label": "rotationScripts"
+		},		
+		{
+			"$ref": "fileRef"
+		}
+	]
+}

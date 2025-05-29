@@ -1,0 +1,171 @@
+[
+  {
+    "$id": "text",
+    "description": "plain text"
+  },
+  {
+    "$id": "url",
+    "description": "url string, can be clicked"
+  },
+  {
+    "$id": "multiline",
+    "description": "multiline text"
+  },
+  {
+    "$id": "checkbox",
+    "description": "on/off checkbox"
+  },
+  {
+    "$id": "dropdown",
+    "description": "list of text choices"
+  },
+  {
+    "$id": "file",
+    "description": "large binary object, picture or other file"
+  },
+  {
+    "$id": "fileRef",
+    "description": "reference to the file field on another record"
+  },
+  {
+    "$id": "email",
+    "description": "valid email address plus tag"
+  },
+  {
+    "$id": "host",
+    "description": "multiple fields to capture host information",
+    "elements": [
+      "hostName",
+      "port"
+    ]
+  },
+  {
+    "$id": "phone",
+    "description": "numbers and symbols only plus tag"
+  },
+  {
+    "$id": "name",
+    "description": "multiple fields to capture name",
+    "elements": [
+      "firstName",
+      "lastName",
+      "fullName"
+    ]
+  },
+  {
+    "$id": "address",
+    "description": "multiple fields to capture address",
+    "elements": [
+      "street1",
+      "street2",
+      "city",
+      "state",
+      "zip",
+      "country"
+    ]
+  },
+  {
+    "$id": "addressRef",
+    "description": "reference to the address field on another record"
+  },
+  {
+    "$id": "secret",
+    "description": "the field value is masked"
+  },
+  {
+    "$id": "login",
+    "description": "Login field, detected as the website login for browser extension or KFFA."
+  },
+  {
+    "$id": "password",
+    "description": "Field value is masked and allows for generation. Also complexity enforcements."
+  },
+  {
+    "$id": "securityQuestion",
+    "description": "Security Question and Answer",
+    "elements": [
+      "question",
+      "answer"
+    ]
+  },
+  {
+    "$id": "otp",
+    "description": "captures the seed, displays QR code"
+  },
+  {
+    "$id": "paymentCard",
+    "description": "Field consisting of validated card number, expiration date and security code.",
+    "elements": [
+      "cardNumber",
+      "cardExpirationDate",
+      "cardSecurityCode"
+    ]
+  },
+  {
+    "$id": "date",
+    "description": "calendar date with validation, stored as unix milliseconds"
+  },
+  {
+    "$id": "bankAccount",
+    "description": "bank account information",
+    "elements": [
+      "accountType",
+      "routingNumber",
+      "accountNumber"
+    ]
+  },
+  {
+    "$id": "privateKey",
+    "description": "private key in ASN.1 format"
+  },
+  {
+    "$id": "schedule",
+    "description": "schedule information"
+  },
+  {
+    "$id": "recordRef",
+    "description": "reference to other records"
+  },
+  {
+    "$id": "script",
+    "description": "Script execution details",
+    "elements": [
+      "command",
+      "fileRef",
+      "recordRef"
+    ]
+  },
+  {
+    "$id": "pamHostname",
+    "description": "multiple fields to capture host information for PAM.  When the field is required, they must enter both host and port",
+    "elements": [
+      "hostName",
+      "port"
+    ]
+  },
+  {
+    "$id": "passkey",
+    "description": "webauthn credential with private key, origin, and user / key identifiers",
+    "elements": [
+      "privateKey",
+      "credentialId",
+      "signCount",
+      "userId",
+      "relyingParty",
+      "username",
+      "createdDate"
+    ]
+  },
+  {
+    "$id": "pamSettings",
+    "description": "Guacamole connection settings"
+  },
+  {
+    "$id": "pamRemoteBrowserSettings",
+    "description": "Guacamole HTTP protocol connection settings"
+  },
+  {
+    "$id": "trafficEncryptionSeed",
+    "description": "Base 64 encoded 256 bits value used to derive an encryption key to use with message encyrption"
+  }
+]

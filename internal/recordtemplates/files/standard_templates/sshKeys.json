@@ -1,0 +1,23 @@
+{
+  "$id": "sshKeys",
+  "categories": ["login"],
+  "description": "SSH key template",
+  "fields": [
+    {
+      "$ref": "login"
+    },
+    {
+      "$ref": "keyPair"
+    },
+    {
+      "$ref": "password",
+      "label": "passphrase"
+    },
+    {
+      "$ref": "host"
+    },
+    {
+      "$ref": "fileRef"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "$id": "birthCertificate",
+  "categories": ["ids"],
+  "description": "Birth certificate template",
+  "fields": [
+    {
+      "$ref": "name"
+    },
+    {
+      "$ref": "birthDate"
+    },
+    {
+      "$ref": "fileRef"
+    }
+  ]
+}
