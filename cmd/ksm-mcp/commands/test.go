@@ -133,22 +133,18 @@ func runTest(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Println("✓")
 
-	// Test connection by listing secrets
-	fmt.Print("3. Connecting to Keeper Secrets Manager... ")
-	start := time.Now()
-	secrets, err := client.ListSecrets("")
-	elapsed := time.Since(start)
-
+	// Test listing secrets
+	fmt.Fprint(os.Stderr, "Testing secret listing... ")
+	secrets, err := client.ListSecrets([]string{})
 	if err != nil {
-		fmt.Println("✗")
-		return fmt.Errorf("connection failed: %w", err)
+		fmt.Fprintln(os.Stderr, "✗")
+		return fmt.Errorf("failed to list secrets: %w", err)
 	}
-	fmt.Printf("✓ (%.2fs)\n", elapsed.Seconds())
+	fmt.Fprintf(os.Stderr, "✓ (found %d secrets)\n", len(secrets))
 
 	// Show results
 	fmt.Printf("\n✓ Connection successful!\n")
 	fmt.Printf("  Found %d secrets\n", len(secrets))
-	fmt.Printf("  Response time: %.2fs\n", elapsed.Seconds())
 
 	if testDetails && len(secrets) > 0 {
 		fmt.Println("\nSecret Types:")

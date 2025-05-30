@@ -59,11 +59,10 @@ func TestRealKSMIntegration(t *testing.T) {
 		t.Fatalf("Connection test failed: %v", err)
 	}
 
-	// List all secrets
-	t.Log("Listing secrets...")
-	secrets, err := client.ListSecrets("")
+	// Test ListSecrets
+	secrets, err := client.ListSecrets([]string{})
 	if err != nil {
-		t.Fatalf("Failed to list secrets: %v", err)
+		t.Fatalf("ListSecrets failed: %v", err)
 	}
 
 	t.Logf("Found %d secrets", len(secrets))

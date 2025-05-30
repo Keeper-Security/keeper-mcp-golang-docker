@@ -17,32 +17,33 @@ import (
 // executeListSecrets handles the list_secrets tool
 func (s *Server) executeListSecrets(client KSMClient, args json.RawMessage) (interface{}, error) {
 	var params struct {
-		FolderUID string `json:"folder_uid,omitempty"`
+		FolderUID  string   `json:"folder_uid,omitempty"`
+		FolderUIDs []string `json:"folder_uids,omitempty"`
 	}
 
 	if err := json.Unmarshal(args, &params); err != nil {
 		return nil, fmt.Errorf("invalid parameters: %w", err)
 	}
 
-	secrets, err := client.ListSecrets(params.FolderUID)
-	if err != nil {
-		return nil, err
+	// Build folder UIDs list from either parameter
+	var folderUIDs []string
+	if len(params.FolderUIDs) > 0 {
+		// Use multiple folder filtering (preferred method)
+		folderUIDs = params.FolderUIDs
+	} else if params.FolderUID != "" {
+		// Use single folder filtering (backward compatibility)
+		folderUIDs = []string{params.FolderUID}
 	}
+	// If both are empty, folderUIDs remains empty (get all secrets)
 
-	// Enhance output to always include UIDs
-	enhancedSecrets := make([]map[string]interface{}, len(secrets))
-	for i, secret := range secrets {
-		enhancedSecrets[i] = map[string]interface{}{
-			"uid":    secret.UID,
-			"title":  secret.Title,
-			"type":   secret.Type,
-			"folder": secret.Folder,
-		}
+	secrets, err := client.ListSecrets(folderUIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list secrets: %w", err)
 	}
 
 	return map[string]interface{}{
-		"secrets": enhancedSecrets,
 		"count":   len(secrets),
+		"secrets": secrets,
 	}, nil
 }
 
@@ -778,7 +779,11 @@ func (s *Server) executeGetAllSecretsUnmaskedConfirmed(client KSMClient, args js
 	})
 
 	// Get list of secrets first
-	secrets, err := client.ListSecrets(params.FolderUID)
+	var folderUIDs []string
+	if params.FolderUID != "" {
+		folderUIDs = []string{params.FolderUID}
+	}
+	secrets, err := client.ListSecrets(folderUIDs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list secrets: %w", err)
 	}

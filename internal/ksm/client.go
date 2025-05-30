@@ -122,21 +122,36 @@ func InitializeWithConfig(configData []byte) (map[string]string, error) {
 	return config, nil
 }
 
-// ListSecrets returns metadata for all secrets
-func (c *Client) ListSecrets(folderUID string) ([]*types.SecretMetadata, error) {
+// ListSecrets returns a flat list of secret metadata, optionally filtered by folder UIDs
+// If folderUIDs is empty, returns all secrets
+// Uses KSM SDK's built-in folder filtering for better performance
+func (c *Client) ListSecrets(folderUIDs []string) ([]*types.SecretMetadata, error) {
 	// Log access attempt
 	if c.logger != nil {
 		c.logAccess("secrets", "list", "", c.profile, true, map[string]interface{}{
-			"folder": folderUID,
+			"folders": folderUIDs,
 		})
 	}
 
-	// Get all secrets
-	records, err := c.sm.GetSecrets([]string{})
+	var records []*sm.Record
+	var err error
+
+	if len(folderUIDs) == 0 {
+		// Get all secrets when no folder filter is specified
+		records, err = c.sm.GetSecrets([]string{})
+	} else {
+		// Use KSM SDK's folder filtering capability
+		queryOptions := sm.QueryOptions{
+			FoldersFilter: folderUIDs,
+		}
+		records, err = c.sm.GetSecretsWithOptions(queryOptions)
+	}
+
 	if err != nil {
 		if c.logger != nil {
 			c.logError("ksm", err, map[string]interface{}{
 				"operation": "list_secrets",
+				"folders":   folderUIDs,
 			})
 		}
 		return nil, fmt.Errorf("failed to list secrets: %w", err)
@@ -145,17 +160,13 @@ func (c *Client) ListSecrets(folderUID string) ([]*types.SecretMetadata, error) 
 	// Convert to metadata
 	var metadata []*types.SecretMetadata
 	for _, record := range records {
-		// Filter by folder if specified
-		if folderUID != "" && record.FolderUid() != folderUID {
-			continue
-		}
-
-		metadata = append(metadata, &types.SecretMetadata{
+		secretMeta := &types.SecretMetadata{
 			UID:    record.Uid,
 			Title:  record.Title(),
 			Type:   record.Type(),
 			Folder: record.FolderUid(),
-		})
+		}
+		metadata = append(metadata, secretMeta)
 	}
 
 	return metadata, nil

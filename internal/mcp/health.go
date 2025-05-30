@@ -75,7 +75,7 @@ func (s *Server) HealthCheck(ctx context.Context) (*HealthStatus, error) {
 		if client, exists := s.profiles[s.currentProfile]; exists && client != nil {
 			// Try a simple operation to verify connection
 			// Use a lightweight operation to check connectivity
-			if _, err := client.ListSecrets(""); err != nil {
+			if _, err := client.ListSecrets([]string{}); err != nil {
 				ksmCheck.Status = "failed"
 				ksmCheck.Error = fmt.Sprintf("connection test failed: %v", err)
 				status.Status = "unhealthy"
