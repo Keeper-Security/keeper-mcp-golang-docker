@@ -7,8 +7,8 @@ KSM MCP is a Model Context Protocol (MCP) server that acts as a secure intermedi
 ### Option 1: Using Docker (Recommended)
 
 1.  **Get KSM Base64 Configuration:**
-    *   Log into the [Keeper Secrets Manager Portal](https://keepersecurity.com/vault).
-    *   Navigate to your KSM Application, then to the "Devices" tab.
+    *   Log into the [Keeper Secrets Vault](https://keepersecurity.com/vault).
+    *   Navigate to your Secrets Manager, Application, then to the "Devices" tab.
     *   Click "Add Device" and copy the **base64-encoded configuration string** provided (it usually starts with `ewog...`).
     > **Important**: The base64 config contains your KSM application's credentials. Keep it secure and never commit it to version control.
 
