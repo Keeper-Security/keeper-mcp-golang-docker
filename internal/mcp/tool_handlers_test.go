@@ -20,8 +20,8 @@ type mockKSMClient struct {
 	mock.Mock
 }
 
-func (m *mockKSMClient) ListSecrets(folderUID string) ([]*types.SecretMetadata, error) {
-	args := m.Called(folderUID)
+func (m *mockKSMClient) ListSecrets(folderUIDs []string) ([]*types.SecretMetadata, error) {
+	args := m.Called(folderUIDs)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -242,7 +242,7 @@ func TestExecuteListSecrets(t *testing.T) {
 			args:        json.RawMessage(`{}`),
 			expectError: false,
 			mockSetup: func(client *mockKSMClient) {
-				client.On("ListSecrets", "").Return([]*types.SecretMetadata{
+				client.On("ListSecrets", []string(nil)).Return([]*types.SecretMetadata{
 					{UID: "uid1", Title: "Secret 1", Type: "login"},
 					{UID: "uid2", Title: "Secret 2", Type: "password"},
 				}, nil)
@@ -250,10 +250,10 @@ func TestExecuteListSecrets(t *testing.T) {
 			validate: func(t *testing.T, result interface{}) {
 				resultMap := result.(map[string]interface{})
 				assert.Equal(t, 2, resultMap["count"])
-				secrets := resultMap["secrets"].([]map[string]interface{})
+				secrets := resultMap["secrets"].([]*types.SecretMetadata)
 				assert.Len(t, secrets, 2)
-				assert.Equal(t, "uid1", secrets[0]["uid"])
-				assert.Equal(t, "Secret 1", secrets[0]["title"])
+				assert.Equal(t, "uid1", secrets[0].UID)
+				assert.Equal(t, "Secret 1", secrets[0].Title)
 			},
 		},
 		{
@@ -261,7 +261,7 @@ func TestExecuteListSecrets(t *testing.T) {
 			args:        json.RawMessage(`{"folder_uid":"folder123"}`),
 			expectError: false,
 			mockSetup: func(client *mockKSMClient) {
-				client.On("ListSecrets", "folder123").Return([]*types.SecretMetadata{
+				client.On("ListSecrets", []string{"folder123"}).Return([]*types.SecretMetadata{
 					{UID: "uid1", Title: "Secret 1", Type: "login", Folder: "folder123"},
 				}, nil)
 			},
@@ -271,11 +271,26 @@ func TestExecuteListSecrets(t *testing.T) {
 			},
 		},
 		{
+			name:        "list with multiple folder filters",
+			args:        json.RawMessage(`{"folder_uids":["folder123","folder456"]}`),
+			expectError: false,
+			mockSetup: func(client *mockKSMClient) {
+				client.On("ListSecrets", []string{"folder123", "folder456"}).Return([]*types.SecretMetadata{
+					{UID: "uid1", Title: "Secret 1", Type: "login", Folder: "folder123"},
+					{UID: "uid2", Title: "Secret 2", Type: "login", Folder: "folder456"},
+				}, nil)
+			},
+			validate: func(t *testing.T, result interface{}) {
+				resultMap := result.(map[string]interface{})
+				assert.Equal(t, 2, resultMap["count"])
+			},
+		},
+		{
 			name:        "KSM client error",
 			args:        json.RawMessage(`{}`),
 			expectError: true,
 			mockSetup: func(client *mockKSMClient) {
-				client.On("ListSecrets", "").Return(nil, errors.New("KSM error"))
+				client.On("ListSecrets", []string(nil)).Return(nil, errors.New("KSM error"))
 			},
 		},
 	}

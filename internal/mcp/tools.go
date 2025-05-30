@@ -15,13 +15,18 @@ func (s *Server) getAvailableTools() []types.MCPTool {
 		// Phase 1 Tools
 		{
 			Name:        "list_secrets",
-			Description: "List all secrets (metadata only, no sensitive data)",
+			Description: "List all secrets (metadata only, no sensitive data). Supports filtering by single folder or multiple folders.",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
 					"folder_uid": map[string]interface{}{
 						"type":        "string",
-						"description": "Filter by folder UID",
+						"description": "Filter by single folder UID (for backward compatibility)",
+					},
+					"folder_uids": map[string]interface{}{
+						"type":        "array",
+						"items":       map[string]interface{}{"type": "string"},
+						"description": "Filter by multiple folder UIDs (uses KSM SDK folder filtering for better performance)",
 					},
 				},
 			},

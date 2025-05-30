@@ -7,7 +7,7 @@ KSM MCP is a Model Context Protocol (MCP) server that acts as a secure intermedi
 ### Option 1: Using Docker (Recommended)
 
 1.  **Get KSM Base64 Configuration:**
-    *   Log into the [Keeper Secrets Manager Portal](https://keepersecurity.com/secrets-manager/).
+    *   Log into the [Keeper Secrets Manager Portal](https://keepersecurity.com/vault).
     *   Navigate to your KSM Application, then to the "Devices" tab.
     *   Click "Add Device" and copy the **base64-encoded configuration string** provided (it usually starts with `ewog...`).
     > **Important**: The base64 config contains your KSM application's credentials. Keep it secure and never commit it to version control.
@@ -117,6 +117,9 @@ Here are some examples of how you might instruct an AI agent (like Claude) to us
 
 *   **Generate a secure password and save it to a new record:**
     *"Generate a very strong 32-character password with uppercase, lowercase, numbers, and special characters. Save it directly to a new login record titled 'Internal Audit Service Account' in the 'Service Accounts' folder. Do not show me the password."*
+
+*   **Check configuration consistency across environments:**
+    *"I have service configuration records organized in folders by environment (dev, qa) with subfolders for each AWS region. Please analyze these records and identify any inconsistencies between similar services across different environments. Pay particular attention to configuration values that should typically be the same across environments, such as logging levels, timeout settings, or feature flags."*
 
 ---
 

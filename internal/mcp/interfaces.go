@@ -10,7 +10,7 @@ import (
 // KSMClient defines the interface for KSM operations
 type KSMClient interface {
 	// Basic secret operations
-	ListSecrets(folderUID string) ([]*types.SecretMetadata, error)
+	ListSecrets(folderUIDs []string) ([]*types.SecretMetadata, error)
 	GetSecret(uid string, fields []string, unmask bool) (map[string]interface{}, error)
 	GetField(notation string, unmask bool) (interface{}, error)
 	SearchSecrets(query string) ([]*types.SecretMetadata, error)
@@ -30,10 +30,10 @@ type KSMClient interface {
 
 	// Folder operations
 	ListFolders() (*types.ListFoldersResponse, error)
-	CreateFolder(name string, parentUID string) (string, error)
+	CreateFolder(name, parentUID string) (string, error)
 	DeleteFolder(uid string, force bool) error
 
-	// Connection testing
+	// Health check
 	TestConnection() error
 }
 

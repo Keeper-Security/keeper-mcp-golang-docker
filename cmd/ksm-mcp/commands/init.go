@@ -233,12 +233,10 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 
-	secrets, err := client.ListSecrets("")
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "✗")
-		return fmt.Errorf("failed to connect to KSM: %w", err)
+	// Test the connection by listing secrets
+	if _, err := client.ListSecrets([]string{}); err != nil {
+		return fmt.Errorf("failed to test KSM connection: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "✓ (found %d secrets)\n", len(secrets))
 
 	// Create and save profile
 	profile := &types.Profile{

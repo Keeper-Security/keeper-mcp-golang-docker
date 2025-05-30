@@ -60,6 +60,7 @@ tasks:
       - go clean
       - rm -rf {{.BUILD_DIR}}
       - rm -rf dist/
+      - rm -f ksm-mcp
       - rm -f coverage.out coverage.html
 
   # Quality assurance tasks
