@@ -4,7 +4,7 @@ vars:
   BINARY_NAME: ksm-mcp
   VERSION: '{{default "dev" .VERSION}}'
   BUILD_DIR: bin
-  DOCKER_IMAGE: keepersecurityinc/ksm-mcp-poc
+  DOCKER_IMAGE: keepersecurityinc/ksm-mcp-scratch
   DOCKER_TAG: '{{default "latest" .DOCKER_TAG}}'
   SRC_DIR: ./cmd/{{.BINARY_NAME}}
   LDFLAGS: '-ldflags "-X main.version={{.VERSION}} -w -s"'
@@ -175,9 +175,11 @@ tasks:
   # Docker tasks
   docker-build:
     desc: Build Docker image
+    vars:
+      BYPASS_SSL: '{{default "false" .BYPASS_SSL}}'
     cmds:
-      - echo "Building Docker image..."
-      - docker build -t {{.DOCKER_IMAGE}}:{{.DOCKER_TAG}} .
+      - echo "Building Docker image with BYPASS_SSL={{.BYPASS_SSL}}..."
+      - docker build --build-arg BYPASS_SSL={{.BYPASS_SSL}} -t {{.DOCKER_IMAGE}}:{{.DOCKER_TAG}} .
       - docker tag {{.DOCKER_IMAGE}}:{{.DOCKER_TAG}} {{.DOCKER_IMAGE}}:latest
       - echo "Docker image built - {{.DOCKER_IMAGE}}:{{.DOCKER_TAG}}"
 
