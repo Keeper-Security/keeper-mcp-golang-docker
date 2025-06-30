@@ -53,7 +53,7 @@ tmp/
 temp/
 
 # Docker
-.dockerignore
+!.dockerignore
 
 # Local environment files
 .env
