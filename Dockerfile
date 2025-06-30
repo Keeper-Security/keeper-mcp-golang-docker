@@ -44,6 +44,7 @@ LABEL org.opencontainers.image.title="KSM MCP Server" \
 USER ksm
 
 COPY --from=builder /etc/passwd /etc/passwd
+COPY --from=builder /etc/group /etc/group
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=builder /home/ksm/ /home/ksm/
 

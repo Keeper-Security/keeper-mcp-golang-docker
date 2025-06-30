@@ -1,7 +1,6 @@
 # Project Configuration
 Taskfile.yml
 README.md
-Dockerfile
 docker-compose.ci.yml
 
 # Example Usage
