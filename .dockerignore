@@ -1,0 +1,10 @@
+# Project Configuration
+Taskfile.yml
+README.md
+docker-compose.ci.yml
+
+# Example Usage
+examples/
+
+# CI / GitHub Integration
+.github/
