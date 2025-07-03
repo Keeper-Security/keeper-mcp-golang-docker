@@ -41,15 +41,21 @@
   },
   {
     "$id": "phone",
-    "description": "numbers and symbols only plus tag"
+    "description": "numbers and symbols only plus tag",
+    "elements": [
+      "region",
+      "number",
+      "ext",
+      "type"
+    ]
   },
   {
     "$id": "name",
     "description": "multiple fields to capture name",
     "elements": [
-      "firstName",
-      "lastName",
-      "fullName"
+      "first",
+      "middle",
+      "last"
     ]
   },
   {
@@ -111,16 +117,26 @@
     "elements": [
       "accountType",
       "routingNumber",
-      "accountNumber"
+      "accountNumber",
+      "otherType"
     ]
   },
   {
     "$id": "privateKey",
-    "description": "private key in ASN.1 format"
+    "description": "private key in ASN.1 format",
+    "elements": [
+      "publicKey",
+      "privateKey"
+    ]
   },
   {
     "$id": "schedule",
-    "description": "schedule information"
+    "description": "schedule information",
+    "elements": [
+      "type",
+      "time",
+      "month"
+    ]
   },
   {
     "$id": "recordRef",
@@ -154,6 +170,24 @@
       "relyingParty",
       "username",
       "createdDate"
+    ]
+  },
+  {
+    "$id": "appFiller",
+    "description": "Native Application Filler",
+    "elements": [
+      "applicationTitle",
+      "contentFilter",
+      "macroSequence"
+    ]
+  },
+  {
+    "$id": "pamResources",
+    "description": "PAM resources",
+    "elements": [
+      "controllerUid",
+      "folderUid",
+      "resourceRef"
     ]
   },
   {
