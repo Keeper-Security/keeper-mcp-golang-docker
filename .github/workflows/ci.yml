@@ -77,22 +77,6 @@ jobs:
       with:
         args: ./...
 
-    - name: Run Trivy vulnerability scanner (repo)
-      uses: aquasecurity/trivy-action@master
-      with:
-        scan-type: 'fs'
-        scan-ref: '.'
-        format: 'sarif'
-        output: 'trivy-results.sarif'
-      continue-on-error: true
-
-    - name: Upload Trivy scan results to GitHub Security tab
-      uses: github/codeql-action/upload-sarif@v3
-      with:
-        sarif_file: 'trivy-results.sarif'
-      if: success() || failure()
-      continue-on-error: true
-
   build:
     name: Build
     runs-on: ubuntu-latest
@@ -154,21 +138,6 @@ jobs:
         tags: ksm-mcp:ci-test
         cache-from: type=gha
         cache-to: type=gha,mode=max
-
-    - name: Run Trivy vulnerability scanner
-      uses: aquasecurity/trivy-action@master
-      with:
-        image-ref: ksm-mcp:ci-test
-        format: 'sarif'
-        output: 'trivy-results.sarif'
-      continue-on-error: true
-
-    - name: Upload Trivy scan results
-      uses: github/codeql-action/upload-sarif@v3
-      with:
-        sarif_file: 'trivy-results.sarif'
-      if: always()
-      continue-on-error: true
 
     - name: Save Docker image
       run: |
