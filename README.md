@@ -27,7 +27,7 @@ KSM MCP is a Model Context Protocol (MCP) server that acts as a secure intermedi
           "args": [
             "run", "-i", "--rm",
             "-e", "KSM_CONFIG_BASE64=YOUR_BASE64_CONFIG_STRING_HERE",
-            "keepersecurityinc/ksm-mcp-poc:latest"
+            "keeper/keeper-mcp-server:latest"
           ]
         }
         // You might have other servers like "memory" here, leave them as is.
@@ -139,7 +139,7 @@ The KSM MCP server can be instantiated in multiple ways with various configurati
       "args": [
         "run", "-i", "--rm",
         "-e", "KSM_CONFIG_BASE64=YOUR_BASE64_CONFIG_STRING",
-        "keepersecurityinc/ksm-mcp-poc:latest"
+        "keeper-mcp-server:latest"
       ]
     }
   }
@@ -376,7 +376,7 @@ ksm-mcp serve --profile dev --log-level debug
 ```bash
 docker run -i --rm \
   -e KSM_CONFIG_BASE64="ewogICJob3N0bmFtZSI6..." \
-  keepersecurityinc/ksm-mcp-poc:latest
+  keeper-mcp-server:latest
 ```
 
 #### CI/CD Setup (No Local Files)
