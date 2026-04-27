@@ -1124,14 +1124,14 @@ func processFieldsForSDK(inputFields []types.SecretField) ([]types.SecretField, 
 		"key":            true, // often used for API keys, simple text
 		"securityCode":   true, // Simple text, like a CVV if not part of paymentCard
 		"cardNumber":     true, // Simple text, if not part of paymentCard
-		"routingNumber":  true, // Simple text, if not part of bankAccount
+		"routingNumber":  true,
 	}
 
 	// Define complex fields and their expected sub-fields based on record-templates/field-types.json
 	// This map helps identify and parse flattened complex fields.
 	// The value is a map of the sub-field name to its type (not strictly enforced here but good for reference)
 	complexFieldDefinitions := map[string]map[string]string{
-		"name":             {"firstName": "string", "lastName": "string", "fullName": "string"}, // Corrected to match field-types.json elements
+		"name":             {"first": "string", "middle": "string", "last": "string"}, // Corrected to match field-types.json elements
 		"phone":            {"region": "string", "number": "string", "ext": "string", "type": "string"},
 		"address":          {"street1": "string", "street2": "string", "city": "string", "state": "string", "zip": "string", "country": "string"},
 		"host":             {"hostName": "string", "port": "string"},
@@ -1144,10 +1144,16 @@ func processFieldsForSDK(inputFields []types.SecretField) ([]types.SecretField, 
 		"appFiller":        {"applicationTitle": "string", "contentFilter": "string", "macroSequence": "string"},
 		"pamResources":     {"controllerUid": "string", "folderUid": "string", "resourceRef": "string"}, // resourceRef is string array, AI sends as comma-sep string?
 		"script":           {"command": "string", "fileRef": "string", "recordRef": "string"},           // recordRef is string array, AI sends as comma-sep string?
+		"schedule":         {"type": "string", "time": "string", "month": "string"},
+		"privateKey":       {"publicKey": "string", "privateKey": "string"},
 	}
 
 	for _, field := range inputFields {
-		parts := strings.SplitN(field.Type, ".", 2)
+		// Validate and format field values before processing
+		formattedField, fieldWarnings := validateAndFormatField(field)
+		warnings = append(warnings, fieldWarnings...)
+
+		parts := strings.SplitN(formattedField.Type, ".", 2)
 		baseType := parts[0]
 		subField := ""
 		if len(parts) > 1 {
@@ -1160,13 +1166,13 @@ func processFieldsForSDK(inputFields []types.SecretField) ([]types.SecretField, 
 			if _, ok := definition[subField]; !ok {
 				// This subField is not defined for this complex type, treat baseType as simple
 				// Or it could be an error / unexpected field. For now, log a warning or error.
-				warnings = append(warnings, fmt.Sprintf("Warning: Field '%s' contains an unrecognized sub-field '%s'. Treating '%s' as a simple field.", field.Type, subField, baseType))
+				warnings = append(warnings, fmt.Sprintf("Warning: Field '%s' contains an unrecognized sub-field '%s'. Treating '%s' as a simple field.", formattedField.Type, subField, baseType))
 				// Fallback to treating the original field.Type as simple if sub-field is not recognized
-				if singleValueSimpleFields[field.Type] && len(field.Value) > 1 {
-					warnings = append(warnings, fmt.Sprintf("Field '%s' (treated as simple) has %d values; using only the first.", field.Type, len(field.Value)))
-					field.Value = field.Value[:1]
+				if singleValueSimpleFields[formattedField.Type] && len(formattedField.Value) > 1 {
+					warnings = append(warnings, fmt.Sprintf("Field '%s' (treated as simple) has %d values; using only the first.", formattedField.Type, len(formattedField.Value)))
+					formattedField.Value = formattedField.Value[:1]
 				}
-				processedFields = append(processedFields, field)
+				processedFields = append(processedFields, formattedField)
 				continue
 			}
 
@@ -1179,9 +1185,9 @@ func processFieldsForSDK(inputFields []types.SecretField) ([]types.SecretField, 
 				tempComplexFields[instanceKey] = make(map[string]interface{})
 				complexFieldOrder[instanceKey] = make([]string, 0) // Store order of subfields
 			}
-			if len(field.Value) > 0 {
+			if len(formattedField.Value) > 0 {
 				// Take the first element from the value array, as per our single-value principle for the flattened representation
-				tempComplexFields[instanceKey][subField] = field.Value[0]
+				tempComplexFields[instanceKey][subField] = formattedField.Value[0]
 				complexFieldOrder[instanceKey] = append(complexFieldOrder[instanceKey], subField)
 			} else {
 				// Handle cases where a sub-field might be present but have an empty value array
@@ -1189,15 +1195,15 @@ func processFieldsForSDK(inputFields []types.SecretField) ([]types.SecretField, 
 			}
 
 		} else { // Simple field or a complex field that wasn't split (e.g. "otp", "file", or user provided "bankAccount" without ".subfield")
-			if singleValueSimpleFields[field.Type] && len(field.Value) > 1 {
-				warnings = append(warnings, fmt.Sprintf("Field '%s' has %d values; using only the first.", field.Type, len(field.Value)))
-				field.Value = field.Value[:1] // Enforce single value
+			if singleValueSimpleFields[formattedField.Type] && len(formattedField.Value) > 1 {
+				warnings = append(warnings, fmt.Sprintf("Field '%s' has %d values; using only the first.", formattedField.Type, len(formattedField.Value)))
+				formattedField.Value = formattedField.Value[:1] // Enforce single value
 			}
 			// Special handling for fields that are complex by nature but might be passed without sub-fields initially
 			// e.g. a raw "securityQuestion" field before it's broken down.
 			// If it's a known complex type but passed without sub-field, it might be an error or needs default handling.
 			// For now, just add it as is, KSM SDK might reject it if structure is wrong.
-			processedFields = append(processedFields, field)
+			processedFields = append(processedFields, formattedField)
 		}
 	}
 
@@ -1220,29 +1226,16 @@ func processFieldsForSDK(inputFields []types.SecretField) ([]types.SecretField, 
 		switch baseType {
 		case "name":
 			nameMap := make(map[string]interface{})
-			// Values from AI will use keys "firstName", "lastName", "fullName"
-			// We map them to SDK's expected JSON keys "first", "middle", "last"
-			if val, ok := subFieldsMap["firstName"].(string); ok {
+			// Values from AI will use keys "first", "middle", "last"
+			// These now match the SDK's expected JSON keys directly
+			if val, ok := subFieldsMap["first"].(string); ok {
 				nameMap["first"] = val
 			}
-			if val, ok := subFieldsMap["lastName"].(string); ok {
-				nameMap["last"] = val
+			if val, ok := subFieldsMap["middle"].(string); ok {
+				nameMap["middle"] = val
 			}
-			// If fullName is provided, and first/last are also given, middle is ambiguous.
-			// If only fullName is given, it might be used for first or split.
-			// For simplicity with KSM SDK expecting distinct parts, we'll prioritize first/last.
-			// Middle name is often optional. If template had a "middleName" element, we'd map it.
-			if val, ok := subFieldsMap["fullName"].(string); ok {
-				// If first and last are empty, attempt to use fullName for first.
-				if nameMap["first"] == nil && nameMap["last"] == nil && val != "" {
-					nameMap["first"] = val // Or try to split it intelligently if desired
-				} else if nameMap["first"] != nil && nameMap["last"] != nil && val != "" {
-					// If first and last are set, maybe fullName goes to middle? Or just log a warning.
-					nameMap["middle"] = val // This is an assumption
-					warnings = append(warnings, fmt.Sprintf("Warning: For field '%s', 'fullName' was provided alongside 'firstName' and 'lastName'. 'fullName' mapped to 'middle'.", instanceKey))
-				} else if val != "" && nameMap["first"] == nil {
-					nameMap["first"] = val // if only fullname is there, set it to first.
-				}
+			if val, ok := subFieldsMap["last"].(string); ok {
+				nameMap["last"] = val
 			}
 			// Ensure keys expected by SDK are present, even if empty, if that's how SDK handles it.
 			if _, ok := nameMap["first"]; !ok {
@@ -1434,6 +1427,18 @@ func processFieldsForSDK(inputFields []types.SecretField) ([]types.SecretField, 
 				scriptMap["recordRef"] = []string{}
 			}
 			complexValue = scriptMap
+		case "schedule":
+			scheduleMap := make(map[string]interface{})
+			if t, ok := subFieldsMap["type"].(string); ok {
+				scheduleMap["type"] = t
+			}
+			if tm, ok := subFieldsMap["time"].(string); ok {
+				scheduleMap["time"] = tm
+			}
+			if m, ok := subFieldsMap["month"].(string); ok {
+				scheduleMap["month"] = m
+			}
+			complexValue = scheduleMap
 		default:
 			// For other complex types not explicitly handled, pass as map[string]interface{}
 			// KSM SDK might handle it if the structure matches, or reject it.
@@ -1448,4 +1453,132 @@ func processFieldsForSDK(inputFields []types.SecretField) ([]types.SecretField, 
 		})
 	}
 	return processedFields, warnings, nil
+}
+
+// validateAndFormatField validates and formats field values according to Commander API expectations
+func validateAndFormatField(field types.SecretField) (types.SecretField, []string) {
+	warnings := make([]string, 0)
+
+	if len(field.Value) == 0 {
+		return field, warnings
+	}
+	parts := strings.SplitN(field.Type, ".", 2)
+	baseType := parts[0]
+	subField := ""
+	if len(parts) > 1 {
+		subField = parts[1]
+	}
+
+	// Apply field-specific formatting
+	for i, value := range field.Value {
+		if valueStr, ok := value.(string); ok {
+			formattedValue, warning := formatFieldValue(valueStr, baseType, subField)
+			if warning != "" {
+				warnings = append(warnings, fmt.Sprintf("Field '%s': %s", field.Type, warning))
+			}
+			field.Value[i] = formattedValue
+		}
+	}
+
+	return field, warnings
+}
+
+// formatFieldValue formats individual field values according to Commander API requirements
+func formatFieldValue(value, baseType, subField string) (string, string) {
+	var warning string
+
+	// Handle date fields - must be Unix milliseconds
+	if baseType == "date" || baseType == "birthDate" || baseType == "expirationDate" ||
+		(baseType == "passkey" && subField == "createdDate") {
+		return formatDateField(value)
+	}
+
+	// Handle card number fields - remove dashes and formatting
+	if (baseType == "paymentCard" && subField == "cardNumber") || baseType == "cardNumber" {
+		return formatCardNumber(value)
+	}
+
+	// Handle card expiration date - ensure MM/YYYY format
+	if baseType == "paymentCard" && subField == "cardExpirationDate" {
+		return formatExpirationDate(value)
+	}
+
+	return value, warning
+}
+
+// formatDateField ensures date is in Unix milliseconds format
+func formatDateField(value string) (string, string) {
+	// If it's already a Unix timestamp (numeric), convert to milliseconds if needed
+	if len(value) > 0 && value[0] >= '0' && value[0] <= '9' {
+		// Check if it's seconds (10 digits) vs milliseconds (13 digits)
+		if len(value) == 10 {
+			// Convert seconds to milliseconds
+			if timestamp, err := strconv.ParseInt(value, 10, 64); err == nil {
+				return strconv.FormatInt(timestamp*1000, 10), ""
+			}
+		} else if len(value) == 13 {
+			// Already milliseconds
+			return value, ""
+		}
+	}
+
+	// For non-numeric values, try to parse common date formats
+	// This is a basic implementation - you might want to extend this
+	return value, "Date format may not be compatible with API - expected Unix milliseconds"
+}
+
+// formatCardNumber removes dashes and spaces from card numbers
+func formatCardNumber(value string) (string, string) {
+	// Remove dashes, spaces, and other common formatting
+	cleaned := strings.ReplaceAll(value, "-", "")
+	cleaned = strings.ReplaceAll(cleaned, " ", "")
+	cleaned = strings.ReplaceAll(cleaned, ".", "")
+
+	if cleaned != value {
+		return cleaned, fmt.Sprintf("Removed formatting from card number: '%s' -> '%s'", value, cleaned)
+	}
+
+	return value, ""
+}
+
+// formatExpirationDate ensures MM/YYYY format instead of MM/YY
+func formatExpirationDate(value string) (string, string) {
+	// Common formats: MM/YY, MM/YYYY, MMYY, MMYYYY
+	value = strings.TrimSpace(value)
+
+	// Handle MM/YY -> MM/YYYY
+	if len(value) == 5 && strings.Contains(value, "/") {
+		parts := strings.Split(value, "/")
+		if len(parts) == 2 && len(parts[1]) == 2 {
+			year, err := strconv.Atoi(parts[1])
+			if err == nil {
+				// Convert 2-digit year to 4-digit year
+				// Assume years 00-30 are 2000-2030, 31-99 are 1931-1999
+				if year <= 30 {
+					year += 2000
+				} else {
+					year += 1900
+				}
+				formatted := fmt.Sprintf("%s/%04d", parts[0], year)
+				return formatted, fmt.Sprintf("Converted expiration date format: '%s' -> '%s'", value, formatted)
+			}
+		}
+	}
+
+	// Handle MMYY -> MM/YYYY
+	if len(value) == 4 && !strings.Contains(value, "/") {
+		month := value[:2]
+		year, err := strconv.Atoi(value[2:])
+		if err == nil {
+			if year <= 30 {
+				year += 2000
+			} else {
+				year += 1900
+			}
+			formatted := fmt.Sprintf("%s/%04d", month, year)
+			return formatted, fmt.Sprintf("Converted expiration date format: '%s' -> '%s'", value, formatted)
+		}
+	}
+
+	return value, ""
 }

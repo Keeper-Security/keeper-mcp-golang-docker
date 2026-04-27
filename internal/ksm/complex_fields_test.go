@@ -1064,3 +1064,183 @@ func TestIsSensitiveFieldComprehensive(t *testing.T) {
 		})
 	}
 }
+
+func TestProcessAppFillerField(t *testing.T) {
+	client := &Client{}
+
+	tests := []struct {
+		name     string
+		value    interface{}
+		unmask   bool
+		expected interface{}
+		found    bool
+	}{
+		{
+			name: "app filler - masked",
+			value: []interface{}{
+				map[string]interface{}{
+					"applicationTitle": "Banking App",
+					"contentFilter":    "input[type=password]",
+					"macroSequence":    "username{TAB}password{ENTER}",
+				},
+			},
+			unmask: false,
+			expected: []map[string]interface{}{
+				{
+					"applicationTitle": "Banking App",
+					"contentFilter":    "input[type=password]",
+					"macroSequence":    "use***ER}",
+				},
+			},
+			found: true,
+		},
+		{
+			name: "app filler - unmasked",
+			value: []interface{}{
+				map[string]interface{}{
+					"applicationTitle": "Shopping Site",
+					"contentFilter":    ".login-form",
+					"macroSequence":    "user@email.com{TAB}SecurePass123{ENTER}",
+				},
+			},
+			unmask: true,
+			expected: []map[string]interface{}{
+				{
+					"applicationTitle": "Shopping Site",
+					"contentFilter":    ".login-form",
+					"macroSequence":    "user@email.com{TAB}SecurePass123{ENTER}",
+				},
+			},
+			found: true,
+		},
+		{
+			name: "minimal app filler",
+			value: []interface{}{
+				map[string]interface{}{
+					"applicationTitle": "Simple App",
+				},
+			},
+			unmask: false,
+			expected: []map[string]interface{}{
+				{
+					"applicationTitle": "Simple App",
+				},
+			},
+			found: true,
+		},
+		{
+			name:     "empty value",
+			value:    []interface{}{},
+			unmask:   false,
+			expected: nil,
+			found:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, found := client.processAppFillerField(tt.value, tt.unmask)
+			assert.Equal(t, tt.found, found, "Found status should match")
+			if tt.found {
+				assert.Equal(t, tt.expected, result, "App filler data should match")
+			}
+		})
+	}
+}
+
+func TestProcessScheduleField(t *testing.T) {
+	client := &Client{}
+
+	tests := []struct {
+		name     string
+		value    interface{}
+		unmask   bool
+		expected interface{}
+		found    bool
+	}{
+		{
+			name: "complete schedule",
+			value: []interface{}{
+				map[string]interface{}{
+					"type":          "Monthly",
+					"time":          "14:30",
+					"cron":          "0 14 1 * *",
+					"tz":            "America/New_York",
+					"weekday":       "1",
+					"intervalCount": float64(1),
+				},
+			},
+			unmask: false,
+			expected: []map[string]interface{}{
+				{
+					"type":          "Monthly",
+					"time":          "14:30",
+					"cron":          "0 14 1 * *",
+					"tz":            "America/New_York",
+					"weekday":       "1",
+					"intervalCount": float64(1),
+				},
+			},
+			found: true,
+		},
+		{
+			name: "weekly schedule",
+			value: []interface{}{
+				map[string]interface{}{
+					"type": "Weekly",
+					"time": "09:00",
+				},
+			},
+			unmask: false,
+			expected: []map[string]interface{}{
+				{
+					"type": "Weekly",
+					"time": "09:00",
+				},
+			},
+			found: true,
+		},
+		{
+			name: "multiple schedules",
+			value: []interface{}{
+				map[string]interface{}{
+					"type": "Daily",
+					"time": "06:00",
+				},
+				map[string]interface{}{
+					"type": "Weekly",
+					"time": "12:00",
+				},
+			},
+			unmask: false,
+			expected: []map[string]interface{}{
+				{
+					"type": "Daily",
+					"time": "06:00",
+				},
+				{
+					"type": "Weekly",
+					"time": "12:00",
+				},
+			},
+			found: true,
+		},
+		{
+			name:     "empty value",
+			value:    []interface{}{},
+			unmask:   false,
+			expected: nil,
+			found:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, found := client.processScheduleField(tt.value, tt.unmask)
+			assert.Equal(t, tt.found, found, "Found status should match")
+			if tt.found {
+				assert.Equal(t, tt.expected, result, "Schedule data should match")
+			}
+		})
+	}
+}

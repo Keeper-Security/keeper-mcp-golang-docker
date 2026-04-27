@@ -873,3 +873,579 @@ func TestExecuteGetRecordTypeSchema(t *testing.T) {
 		})
 	}
 }
+
+func TestProcessFieldsForSDK(t *testing.T) {
+	tests := []struct {
+		name             string
+		inputFields      []types.SecretField
+		expectedFields   []types.SecretField
+		expectedWarnings []string
+	}{
+		{
+			name: "name field with new structure",
+			inputFields: []types.SecretField{
+				{Type: "name.first", Value: []interface{}{"John"}},
+				{Type: "name.middle", Value: []interface{}{"Q"}},
+				{Type: "name.last", Value: []interface{}{"Doe"}},
+			},
+			expectedFields: []types.SecretField{
+				{
+					Type: "name",
+					Value: []interface{}{
+						map[string]interface{}{
+							"first":  "John",
+							"middle": "Q",
+							"last":   "Doe",
+						},
+					},
+				},
+			},
+			expectedWarnings: []string{},
+		},
+		{
+			name: "phone field with all elements",
+			inputFields: []types.SecretField{
+				{Type: "phone.region", Value: []interface{}{"US"}},
+				{Type: "phone.number", Value: []interface{}{"555-123-4567"}},
+				{Type: "phone.ext", Value: []interface{}{"123"}},
+				{Type: "phone.type", Value: []interface{}{"Mobile"}},
+			},
+			expectedFields: []types.SecretField{
+				{
+					Type: "phone",
+					Value: []interface{}{
+						map[string]interface{}{
+							"region": "US",
+							"number": "555-123-4567",
+							"ext":    "123",
+							"type":   "Mobile",
+						},
+					},
+				},
+			},
+			expectedWarnings: []string{},
+		},
+		{
+			name: "bankAccount field with otherType",
+			inputFields: []types.SecretField{
+				{Type: "bankAccount.accountType", Value: []interface{}{"Checking"}},
+				{Type: "bankAccount.routingNumber", Value: []interface{}{"123456789"}},
+				{Type: "bankAccount.accountNumber", Value: []interface{}{"987654321"}},
+				{Type: "bankAccount.otherType", Value: []interface{}{"Business"}},
+			},
+			expectedFields: []types.SecretField{
+				{
+					Type: "bankAccount",
+					Value: []interface{}{
+						map[string]interface{}{
+							"accountType":   "Checking",
+							"routingNumber": "123456789",
+							"accountNumber": "987654321",
+							"otherType":     "Business",
+						},
+					},
+				},
+			},
+			expectedWarnings: []string{},
+		},
+		{
+			name: "schedule field with new elements",
+			inputFields: []types.SecretField{
+				{Type: "schedule.type", Value: []interface{}{"Monthly"}},
+				{Type: "schedule.time", Value: []interface{}{"14:30"}},
+				{Type: "schedule.month", Value: []interface{}{"January"}},
+			},
+			expectedFields: []types.SecretField{
+				{
+					Type: "schedule",
+					Value: []interface{}{
+						map[string]interface{}{
+							"type":  "Monthly",
+							"time":  "14:30",
+							"month": "January",
+						},
+					},
+				},
+			},
+			expectedWarnings: []string{},
+		},
+		{
+			name: "appFiller field with new elements",
+			inputFields: []types.SecretField{
+				{Type: "appFiller.applicationTitle", Value: []interface{}{"Banking App"}},
+				{Type: "appFiller.contentFilter", Value: []interface{}{"input[type=password]"}},
+				{Type: "appFiller.macroSequence", Value: []interface{}{"username{TAB}password{ENTER}"}},
+			},
+			expectedFields: []types.SecretField{
+				{
+					Type: "appFiller",
+					Value: []interface{}{
+						map[string]interface{}{
+							"applicationTitle": "Banking App",
+							"contentFilter":    "input[type=password]",
+							"macroSequence":    "username{TAB}password{ENTER}",
+						},
+					},
+				},
+			},
+			expectedWarnings: []string{},
+		},
+		{
+			name: "privateKey field with elements",
+			inputFields: []types.SecretField{
+				{Type: "privateKey.publicKey", Value: []interface{}{"ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQ..."}},
+				{Type: "privateKey.privateKey", Value: []interface{}{"-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEA..."}},
+			},
+			expectedFields: []types.SecretField{
+				{
+					Type: "privateKey",
+					Value: []interface{}{
+						map[string]interface{}{
+							"publicKey":  "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQ...",
+							"privateKey": "-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEA...",
+						},
+					},
+				},
+			},
+			expectedWarnings: []string{"Warning: Complex field type 'privateKey' is using a generic map structure. SDK compatibility not guaranteed."},
+		},
+		{
+			name: "mixed simple and complex fields",
+			inputFields: []types.SecretField{
+				{Type: "login", Value: []interface{}{"user@example.com"}},
+				{Type: "password", Value: []interface{}{"SecurePass123"}},
+				{Type: "name.first", Value: []interface{}{"Jane"}},
+				{Type: "name.last", Value: []interface{}{"Smith"}},
+				{Type: "url", Value: []interface{}{"https://example.com"}},
+			},
+			expectedFields: []types.SecretField{
+				{Type: "login", Value: []interface{}{"user@example.com"}},
+				{Type: "password", Value: []interface{}{"SecurePass123"}},
+				{Type: "url", Value: []interface{}{"https://example.com"}},
+				{
+					Type: "name",
+					Value: []interface{}{
+						map[string]interface{}{
+							"first":  "Jane",
+							"middle": "",
+							"last":   "Smith",
+						},
+					},
+				},
+			},
+			expectedWarnings: []string{},
+		},
+		{
+			name: "invalid subfield should generate warning",
+			inputFields: []types.SecretField{
+				{Type: "name.invalidField", Value: []interface{}{"test"}},
+			},
+			expectedFields: []types.SecretField{
+				{Type: "name.invalidField", Value: []interface{}{"test"}},
+			},
+			expectedWarnings: []string{"Warning: Field 'name.invalidField' contains an unrecognized sub-field 'invalidField'. Treating 'name' as a simple field."},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			processedFields, warnings, err := processFieldsForSDK(tt.inputFields)
+
+			assert.NoError(t, err, "processFieldsForSDK should not return an error")
+			assert.ElementsMatch(t, tt.expectedWarnings, warnings, "Warnings should match expected")
+			assert.Equal(t, len(tt.expectedFields), len(processedFields), "Number of processed fields should match expected")
+
+			// Check each expected field
+			for _, expectedField := range tt.expectedFields {
+				found := false
+				for _, processedField := range processedFields {
+					if processedField.Type == expectedField.Type {
+						assert.Equal(t, expectedField.Value, processedField.Value, "Field values should match for type %s", expectedField.Type)
+						found = true
+						break
+					}
+				}
+				assert.True(t, found, "Expected field type %s should be found in processed fields", expectedField.Type)
+			}
+		})
+	}
+}
+
+func TestValidateAndFormatField(t *testing.T) {
+	tests := []struct {
+		name             string
+		field            types.SecretField
+		expectedField    types.SecretField
+		expectedWarnings []string
+	}{
+		{
+			name: "date field - convert seconds to milliseconds",
+			field: types.SecretField{
+				Type:  "date",
+				Value: []interface{}{"1703980800"}, // Unix seconds
+			},
+			expectedField: types.SecretField{
+				Type:  "date",
+				Value: []interface{}{"1703980800000"}, // Unix milliseconds
+			},
+			expectedWarnings: []string{},
+		},
+		{
+			name: "date field - already milliseconds",
+			field: types.SecretField{
+				Type:  "birthDate",
+				Value: []interface{}{"1703980800000"},
+			},
+			expectedField: types.SecretField{
+				Type:  "birthDate",
+				Value: []interface{}{"1703980800000"},
+			},
+			expectedWarnings: []string{},
+		},
+		{
+			name: "card number - remove dashes",
+			field: types.SecretField{
+				Type:  "paymentCard.cardNumber",
+				Value: []interface{}{"4111-1111-1111-1111"},
+			},
+			expectedField: types.SecretField{
+				Type:  "paymentCard.cardNumber",
+				Value: []interface{}{"4111111111111111"},
+			},
+			expectedWarnings: []string{"Field 'paymentCard.cardNumber': Removed formatting from card number: '4111-1111-1111-1111' -> '4111111111111111'"},
+		},
+		{
+			name: "card number - remove spaces",
+			field: types.SecretField{
+				Type:  "cardNumber",
+				Value: []interface{}{"4111 1111 1111 1111"},
+			},
+			expectedField: types.SecretField{
+				Type:  "cardNumber",
+				Value: []interface{}{"4111111111111111"},
+			},
+			expectedWarnings: []string{"Field 'cardNumber': Removed formatting from card number: '4111 1111 1111 1111' -> '4111111111111111'"},
+		},
+		{
+			name: "expiration date - convert MM/YY to MM/YYYY",
+			field: types.SecretField{
+				Type:  "paymentCard.cardExpirationDate",
+				Value: []interface{}{"12/25"},
+			},
+			expectedField: types.SecretField{
+				Type:  "paymentCard.cardExpirationDate",
+				Value: []interface{}{"12/2025"},
+			},
+			expectedWarnings: []string{"Field 'paymentCard.cardExpirationDate': Converted expiration date format: '12/25' -> '12/2025'"},
+		},
+		{
+			name: "expiration date - convert MMYY to MM/YYYY",
+			field: types.SecretField{
+				Type:  "paymentCard.cardExpirationDate",
+				Value: []interface{}{"1225"},
+			},
+			expectedField: types.SecretField{
+				Type:  "paymentCard.cardExpirationDate",
+				Value: []interface{}{"12/2025"},
+			},
+			expectedWarnings: []string{"Field 'paymentCard.cardExpirationDate': Converted expiration date format: '1225' -> '12/2025'"},
+		},
+		{
+			name: "expiration date - handle old year correctly",
+			field: types.SecretField{
+				Type:  "paymentCard.cardExpirationDate",
+				Value: []interface{}{"12/99"},
+			},
+			expectedField: types.SecretField{
+				Type:  "paymentCard.cardExpirationDate",
+				Value: []interface{}{"12/1999"},
+			},
+			expectedWarnings: []string{"Field 'paymentCard.cardExpirationDate': Converted expiration date format: '12/99' -> '12/1999'"},
+		},
+		{
+			name: "expiration date - already MM/YYYY format",
+			field: types.SecretField{
+				Type:  "paymentCard.cardExpirationDate",
+				Value: []interface{}{"12/2025"},
+			},
+			expectedField: types.SecretField{
+				Type:  "paymentCard.cardExpirationDate",
+				Value: []interface{}{"12/2025"},
+			},
+			expectedWarnings: []string{},
+		},
+		{
+			name: "passkey created date - convert seconds to milliseconds",
+			field: types.SecretField{
+				Type:  "passkey.createdDate",
+				Value: []interface{}{"1703980800"},
+			},
+			expectedField: types.SecretField{
+				Type:  "passkey.createdDate",
+				Value: []interface{}{"1703980800000"},
+			},
+			expectedWarnings: []string{},
+		},
+		{
+			name: "non-formatted field - no changes",
+			field: types.SecretField{
+				Type:  "login",
+				Value: []interface{}{"user@example.com"},
+			},
+			expectedField: types.SecretField{
+				Type:  "login",
+				Value: []interface{}{"user@example.com"},
+			},
+			expectedWarnings: []string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, warnings := validateAndFormatField(tt.field)
+
+			assert.Equal(t, tt.expectedField, result, "Formatted field should match expected")
+			assert.Equal(t, tt.expectedWarnings, warnings, "Warnings should match expected")
+		})
+	}
+}
+
+func TestFormatDateField(t *testing.T) {
+	tests := []struct {
+		name            string
+		input           string
+		expectedOutput  string
+		expectedWarning string
+	}{
+		{
+			name:            "Unix seconds to milliseconds",
+			input:           "1703980800",
+			expectedOutput:  "1703980800000",
+			expectedWarning: "",
+		},
+		{
+			name:            "Already milliseconds",
+			input:           "1703980800000",
+			expectedOutput:  "1703980800000",
+			expectedWarning: "",
+		},
+		{
+			name:            "Non-numeric date",
+			input:           "2024-01-01",
+			expectedOutput:  "2024-01-01",
+			expectedWarning: "Date format may not be compatible with API - expected Unix milliseconds",
+		},
+		{
+			name:            "Empty value",
+			input:           "",
+			expectedOutput:  "",
+			expectedWarning: "Date format may not be compatible with API - expected Unix milliseconds",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			output, warning := formatDateField(tt.input)
+			assert.Equal(t, tt.expectedOutput, output, "Output should match expected")
+			assert.Equal(t, tt.expectedWarning, warning, "Warning should match expected")
+		})
+	}
+}
+
+func TestFormatCardNumber(t *testing.T) {
+	tests := []struct {
+		name            string
+		input           string
+		expectedOutput  string
+		expectedWarning string
+	}{
+		{
+			name:            "Remove dashes",
+			input:           "4111-1111-1111-1111",
+			expectedOutput:  "4111111111111111",
+			expectedWarning: "Removed formatting from card number: '4111-1111-1111-1111' -> '4111111111111111'",
+		},
+		{
+			name:            "Remove spaces",
+			input:           "4111 1111 1111 1111",
+			expectedOutput:  "4111111111111111",
+			expectedWarning: "Removed formatting from card number: '4111 1111 1111 1111' -> '4111111111111111'",
+		},
+		{
+			name:            "Remove dots",
+			input:           "4111.1111.1111.1111",
+			expectedOutput:  "4111111111111111",
+			expectedWarning: "Removed formatting from card number: '4111.1111.1111.1111' -> '4111111111111111'",
+		},
+		{
+			name:            "Already clean",
+			input:           "4111111111111111",
+			expectedOutput:  "4111111111111111",
+			expectedWarning: "",
+		},
+		{
+			name:            "Mixed formatting",
+			input:           "4111-1111 1111.1111",
+			expectedOutput:  "4111111111111111",
+			expectedWarning: "Removed formatting from card number: '4111-1111 1111.1111' -> '4111111111111111'",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			output, warning := formatCardNumber(tt.input)
+			assert.Equal(t, tt.expectedOutput, output, "Output should match expected")
+			assert.Equal(t, tt.expectedWarning, warning, "Warning should match expected")
+		})
+	}
+}
+
+func TestFormatExpirationDate(t *testing.T) {
+	tests := []struct {
+		name            string
+		input           string
+		expectedOutput  string
+		expectedWarning string
+	}{
+		{
+			name:            "MM/YY to MM/YYYY (2000s)",
+			input:           "12/25",
+			expectedOutput:  "12/2025",
+			expectedWarning: "Converted expiration date format: '12/25' -> '12/2025'",
+		},
+		{
+			name:            "MM/YY to MM/YYYY (1900s)",
+			input:           "12/99",
+			expectedOutput:  "12/1999",
+			expectedWarning: "Converted expiration date format: '12/99' -> '12/1999'",
+		},
+		{
+			name:            "MMYY to MM/YYYY (2000s)",
+			input:           "1225",
+			expectedOutput:  "12/2025",
+			expectedWarning: "Converted expiration date format: '1225' -> '12/2025'",
+		},
+		{
+			name:            "MMYY to MM/YYYY (1900s)",
+			input:           "1299",
+			expectedOutput:  "12/1999",
+			expectedWarning: "Converted expiration date format: '1299' -> '12/1999'",
+		},
+		{
+			name:            "Already MM/YYYY format",
+			input:           "12/2025",
+			expectedOutput:  "12/2025",
+			expectedWarning: "",
+		},
+		{
+			name:            "Edge case - year 30",
+			input:           "12/30",
+			expectedOutput:  "12/2030",
+			expectedWarning: "Converted expiration date format: '12/30' -> '12/2030'",
+		},
+		{
+			name:            "Edge case - year 31",
+			input:           "12/31",
+			expectedOutput:  "12/1931",
+			expectedWarning: "Converted expiration date format: '12/31' -> '12/1931'",
+		},
+		{
+			name:            "With spaces",
+			input:           " 12/25 ",
+			expectedOutput:  "12/2025",
+			expectedWarning: "Converted expiration date format: '12/25' -> '12/2025'",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			output, warning := formatExpirationDate(tt.input)
+			assert.Equal(t, tt.expectedOutput, output, "Output should match expected")
+			assert.Equal(t, tt.expectedWarning, warning, "Warning should match expected")
+		})
+	}
+}
+
+func TestPhoneRegionFormatValidation(t *testing.T) {
+	tests := []struct {
+		name             string
+		inputFields      []types.SecretField
+		expectedFields   []types.SecretField
+		expectedWarnings []string
+	}{
+		{
+			name: "phone field with ISO country codes",
+			inputFields: []types.SecretField{
+				{Type: "phone.region", Value: []interface{}{"WF"}}, // Wallis and Futuna
+				{Type: "phone.number", Value: []interface{}{"555-123-4567"}},
+				{Type: "phone.ext", Value: []interface{}{"101"}},
+				{Type: "phone.type", Value: []interface{}{"Mobile"}},
+			},
+			expectedFields: []types.SecretField{
+				{
+					Type: "phone",
+					Value: []interface{}{
+						map[string]interface{}{
+							"region": "WF",
+							"number": "555-123-4567",
+							"ext":    "101",
+							"type":   "Mobile",
+						},
+					},
+				},
+			},
+			expectedWarnings: []string{},
+		},
+		{
+			name: "phone field with common country codes",
+			inputFields: []types.SecretField{
+				{Type: "phone.region", Value: []interface{}{"US"}},
+				{Type: "phone.number", Value: []interface{}{"555-987-6543"}},
+				{Type: "phone.type", Value: []interface{}{"Home"}},
+			},
+			expectedFields: []types.SecretField{
+				{
+					Type: "phone",
+					Value: []interface{}{
+						map[string]interface{}{
+							"region": "US",
+							"number": "555-987-6543",
+							"type":   "Home",
+						},
+					},
+				},
+			},
+			expectedWarnings: []string{},
+		},
+		{
+			name: "phone field with Canadian country code",
+			inputFields: []types.SecretField{
+				{Type: "phone.region", Value: []interface{}{"CA"}},
+				{Type: "phone.number", Value: []interface{}{"416-555-0123"}},
+				{Type: "phone.type", Value: []interface{}{"Work"}},
+			},
+			expectedFields: []types.SecretField{
+				{
+					Type: "phone",
+					Value: []interface{}{
+						map[string]interface{}{
+							"region": "CA",
+							"number": "416-555-0123",
+							"type":   "Work",
+						},
+					},
+				},
+			},
+			expectedWarnings: []string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			processedFields, warnings, err := processFieldsForSDK(tt.inputFields)
+			assert.NoError(t, err, "processFieldsForSDK should not return an error")
+			assert.Equal(t, tt.expectedFields, processedFields, "Processed fields should match expected")
+			assert.Equal(t, tt.expectedWarnings, warnings, "Warnings should match expected")
+		})
+	}
+}

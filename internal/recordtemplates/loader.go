@@ -330,3 +330,15 @@ func addExampleValuesToSubField(schemaField *types.SchemaField, baseType string,
 func GetParseErrors() []string {
 	return templateParseErrors
 }
+
+// GetFieldType returns the field type definition for a given field type ID.
+// This is primarily used for testing purposes.
+func GetFieldType(fieldTypeID string) *types.TemplateFieldTypeDefinition {
+	if loadedFieldTypes == nil {
+		return nil
+	}
+	if fieldType, exists := loadedFieldTypes[fieldTypeID]; exists {
+		return &fieldType
+	}
+	return nil
+}

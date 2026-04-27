@@ -150,7 +150,7 @@ func (s *Server) getAvailableTools() []types.MCPTool {
 		// Phase 2 Tools
 		{
 			Name:        "create_secret",
-			Description: "Create a new KSM secret. Fields are specified in a flattened format. Examples: 'login', 'password', 'bankAccount.accountType', 'phone.type', 'name.first', 'passkey.credentialId', 'passkey.privateKey' (as JSON string of JWK). For enum-like fields (e.g., phone.type), use TitleCase values (e.g., 'Mobile'). Requires confirmation.",
+			Description: "Create a new KSM secret. Fields are specified in a flattened format. Examples: 'login', 'password', 'bankAccount.accountType', 'phone.type', 'name.first', 'passkey.credentialId', 'passkey.privateKey' (as JSON string of JWK). For enum-like fields (e.g., phone.type), use TitleCase values (e.g., 'Mobile'). For phone.region, use ISO country codes (e.g., 'US', 'WF', 'CA'). Requires confirmation.",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
@@ -178,7 +178,7 @@ func (s *Server) getAvailableTools() []types.MCPTool {
 								},
 								"value": map[string]interface{}{
 									"type":        "array",
-									"description": "Field value, as a single-element array (e.g., [\"the_value\"] ). For enum-like sub-fields (e.g. phone.type), use TitleCase values (e.g. [\"Mobile\"]). For passkey.privateKey, value should be a JSON string representing the JsonWebKey. Example complex fields: bankAccount:[{accountType,routingNumber,accountNumber}], name:[{first,middle,last}], passkey:[{privateKey (JSON string),credentialId,signCount,userId,relyingParty,username,createdDate}], appFiller:[{applicationTitle,contentFilter,macroSequence}], script:[{command,fileRef,recordRef (comma-sep UIDs)}], pamResources:[{controllerUid,folderUid,resourceRef (comma-sep UIDs)}]",
+									"description": "Field value, as a single-element array (e.g., [\"the_value\"] ). For enum-like sub-fields (e.g. phone.type), use TitleCase values (e.g. [\"Mobile\"]). For phone.region, use ISO country codes (e.g. [\"US\"], [\"WF\"], [\"CA\"]). For passkey.privateKey, value should be a JSON string representing the JsonWebKey. Example complex fields: bankAccount:[{accountType,routingNumber,accountNumber}], name:[{first,middle,last}], passkey:[{privateKey (JSON string),credentialId,signCount,userId,relyingParty,username,createdDate}], appFiller:[{applicationTitle,contentFilter,macroSequence}], script:[{command,fileRef,recordRef (comma-sep UIDs)}], pamResources:[{controllerUid,folderUid,resourceRef (comma-sep UIDs)}]",
 									"items":       map[string]interface{}{"type": "string"},
 									"minItems":    1,
 									"maxItems":    1,
@@ -197,7 +197,7 @@ func (s *Server) getAvailableTools() []types.MCPTool {
 		},
 		{
 			Name:        "update_secret",
-			Description: "Update an existing KSM secret. Fields are specified in a flattened format. Examples: 'login', 'password', 'bankAccount.accountType', 'phone.type', 'name.first', 'passkey.credentialId', 'passkey.privateKey' (as JSON string of JWK). For enum-like fields (e.g., phone.type), use TitleCase values (e.g., 'Mobile'). Requires confirmation.",
+			Description: "Update an existing KSM secret. Fields are specified in a flattened format. Examples: 'login', 'password', 'bankAccount.accountType', 'phone.type', 'name.first', 'passkey.credentialId', 'passkey.privateKey' (as JSON string of JWK). For enum-like fields (e.g., phone.type), use TitleCase values (e.g., 'Mobile'). For phone.region, use ISO country codes (e.g., 'US', 'WF', 'CA'). Requires confirmation.",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
@@ -221,7 +221,7 @@ func (s *Server) getAvailableTools() []types.MCPTool {
 								},
 								"value": map[string]interface{}{
 									"type":        "array",
-									"description": "Field value, as a single-element array (e.g., [\"the_value\"] ). For enum-like sub-fields (e.g. phone.type), use TitleCase values (e.g. [\"Mobile\"]). For passkey.privateKey, value should be a JSON string representing the JsonWebKey. Example complex fields: bankAccount:[{accountType,routingNumber,accountNumber}], name:[{first,middle,last}], passkey:[{privateKey (JSON string),credentialId,signCount,userId,relyingParty,username,createdDate}], appFiller:[{applicationTitle,contentFilter,macroSequence}], script:[{command,fileRef,recordRef (comma-sep UIDs)}], pamResources:[{controllerUid,folderUid,resourceRef (comma-sep UIDs)}]",
+									"description": "Field value, as a single-element array (e.g., [\"the_value\"] ). For enum-like sub-fields (e.g. phone.type), use TitleCase values (e.g. [\"Mobile\"]). For phone.region, use ISO country codes (e.g. [\"US\"], [\"WF\"], [\"CA\"]). For passkey.privateKey, value should be a JSON string representing the JsonWebKey. Example complex fields: bankAccount:[{accountType,routingNumber,accountNumber}], name:[{first,middle,last}], passkey:[{privateKey (JSON string),credentialId,signCount,userId,relyingParty,username,createdDate}], appFiller:[{applicationTitle,contentFilter,macroSequence}], script:[{command,fileRef,recordRef (comma-sep UIDs)}], pamResources:[{controllerUid,folderUid,resourceRef (comma-sep UIDs)}]",
 									"items":       map[string]interface{}{"type": "string"},
 									"minItems":    1,
 									"maxItems":    1,
