@@ -19,7 +19,7 @@ on:
 env:
   GO_VERSION: '1.23'
   DOCKER_REGISTRY: docker.io
-  DOCKER_IMAGE: keepersecurityinc/ksm-mcp-poc
+  DOCKER_IMAGE: keeper/keeper-mcp-server
 
 jobs:
   # Step 1: Run all tests
@@ -234,8 +234,8 @@ jobs:
 
           #### Docker Installation
           \`\`\`bash
-          docker pull keepersecurityinc/ksm-mcp-poc:${VERSION}
-          docker pull keepersecurityinc/ksm-mcp-poc:latest
+          docker pull keeper/keeper-mcp-server:${VERSION}
+          docker pull keeper/keeper-mcp-server:latest
           \`\`\`
 
           ### 🚀 What's Changed
