@@ -212,6 +212,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 			}
 		}
 		// Ensure log directory exists
+		// #nosec G304 G703 -- log dir derives from KSM_MCP_CONFIG_DIR env var or the user's home dir, with a fixed "logs" suffix
 		if err := os.MkdirAll(filepath.Join(logConfigDir, "logs"), 0700); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: failed to create log directory at %s: %v\\n", filepath.Join(logConfigDir, "logs"), err)
 		}

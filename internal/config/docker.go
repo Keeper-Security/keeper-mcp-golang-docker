@@ -103,7 +103,7 @@ func LoadProtectionPasswordFromSecret() (string, error) {
 		secretPath = filepath.Join(DockerSecretsPath, ProtectionPasswordSecretName)
 	}
 
-	// #nosec G304 -- Docker secret path is a controlled environment variable or a default
+	// #nosec G304 G703 -- Docker secret path is a controlled environment variable or a default
 	if passwordData, err := os.ReadFile(secretPath); err == nil {
 		password := strings.TrimSpace(string(passwordData))
 		if password != "" {
