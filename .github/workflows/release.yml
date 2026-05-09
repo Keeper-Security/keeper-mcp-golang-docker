@@ -290,6 +290,7 @@ jobs:
           tags: |
             type=semver,pattern={{version}},value=${{ needs.release.outputs.version }}
             type=semver,pattern={{major}}.{{minor}},value=${{ needs.release.outputs.version }}
+            type=raw,value=${{ needs.release.outputs.version }}
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push Docker image
