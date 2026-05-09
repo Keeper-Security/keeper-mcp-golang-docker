@@ -94,6 +94,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create config directory if it doesn't exist
+	// #nosec G304 G703 -- configDir derives from KSM_MCP_CONFIG_DIR env var or the user's home dir
 	if err := os.MkdirAll(configDir, 0700); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}

@@ -95,6 +95,7 @@ func (s *SimpleMockServer) loadTestData() {
 		Title:     "SSH Key",
 		Type:      "sshKeys",
 		FolderUID: "dev-folder",
+		// #nosec G101 -- placeholder credentials for in-memory mock used only in tests
 		Fields: map[string]interface{}{
 			"login":      "dev-admin",
 			"host":       "dev-server.example.com",
@@ -225,6 +226,7 @@ func (s *SimpleMockServer) loadTestData() {
 		Title:     "AWS Production Credentials",
 		Type:      "login",
 		FolderUID: "prod-folder",
+		// #nosec G101 -- AWS documentation example credentials (AKIAIOSFODNN7EXAMPLE / wJalrXUtnFEMI...) for mock test fixture
 		Fields: map[string]interface{}{
 			"login":    "AKIAIOSFODNN7EXAMPLE",
 			"password": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
