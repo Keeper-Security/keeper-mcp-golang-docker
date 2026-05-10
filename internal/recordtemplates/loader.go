@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -50,7 +49,6 @@ func LoadRecordTemplates() error {
 	for _, bf := range basicFields {
 		loadedFields[bf.ID] = bf
 	}
-	fmt.Fprintf(os.Stderr, "DEBUG: Loaded %d basic fields. Example 'script': %+v\n", len(loadedFields), loadedFields["script"]) // DEBUG
 
 	// Load field-types.json
 	fieldTypesData, err := fieldTypesFile.ReadFile("files/field-types.json")
@@ -165,8 +163,6 @@ func GetSchema(recordTypeID string) (*types.RecordTypeSchema, error) {
 // appendSchemaFields is a helper to recursively build the schema fields.
 // It now takes recordTypeID to help with context-specific decisions if needed.
 func appendSchemaFields(tplField types.RecordTemplateField, schemaFields *[]types.SchemaField, isCustom bool, recordTypeID string) {
-	fmt.Fprintf(os.Stderr, "DEBUG: appendSchemaFields for %s - Ref: %s, Label: %s\n", recordTypeID, tplField.Ref, tplField.Label)
-
 	basicField, bfOk := loadedFields[tplField.Ref]
 	if !bfOk {
 		templateParseErrors = append(templateParseErrors, fmt.Sprintf("[%s] Referenced field $%s not found in fields.json for template field label '%s'", recordTypeID, tplField.Ref, tplField.Label))
