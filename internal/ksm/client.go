@@ -1422,13 +1422,26 @@ func (c *Client) CreateSecret(params types.CreateSecretParams) (string, error) {
 		recordData.Notes = params.Notes
 	}
 	var fields []interface{}
+	var customFields []interface{}
 	for _, field := range params.Fields {
-		fields = append(fields, map[string]interface{}{
-			"type":  field.Type,
-			"value": field.Value,
-		})
+		if field.IsCustom {
+			entry := map[string]interface{}{
+				"type":  field.Type,
+				"label": field.Label,
+				"value": field.Value,
+			}
+			customFields = append(customFields, entry)
+		} else {
+			fields = append(fields, map[string]interface{}{
+				"type":  field.Type,
+				"value": field.Value,
+			})
+		}
 	}
 	recordData.Fields = fields
+	if len(customFields) > 0 {
+		recordData.Custom = customFields
+	}
 
 	// Get all folders for context and to determine shared parent for SDK options
 	allKeeperFolders, err := c.sm.GetFolders() // SDK type: []*sm.KeeperFolder
@@ -1513,7 +1526,14 @@ func (c *Client) UpdateSecret(params types.UpdateSecretParams) error {
 		record.SetTitle(params.Title)
 	}
 	for _, field := range params.Fields {
-		if field.Type == "password" && len(field.Value) > 0 {
+		if field.IsCustom && field.Label != "" {
+			// Custom fields are keyed by label in the record's custom[] section
+			if len(field.Value) > 0 {
+				if value, ok := field.Value[0].(string); ok {
+					record.SetCustomFieldValueSingle(field.Label, value)
+				}
+			}
+		} else if field.Type == "password" && len(field.Value) > 0 {
 			if password, ok := field.Value[0].(string); ok {
 				record.SetPassword(password)
 			}
