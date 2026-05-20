@@ -20,6 +20,7 @@ env:
   GO_VERSION: '1.24'
   DOCKER_REGISTRY: docker.io
   DOCKER_IMAGE: keeper/keeper-mcp-server
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
   # Step 1: Run all tests
@@ -84,7 +85,7 @@ jobs:
           path: coverage.html
 
       - name: Upload security results
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: gosec-results.sarif
