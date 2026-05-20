@@ -1087,6 +1087,9 @@ func processFieldsForSDK(inputFields []types.SecretField) ([]types.SecretField, 
 	processedFields := make([]types.SecretField, 0)
 	tempComplexFields := make(map[string]map[string]interface{}) // Stores parts of complex fields, e.g., tempComplexFields["bankAccount_0"]["routingNumber"] = "123"
 	complexFieldOrder := make(map[string][]string)               // Maintains order of elements for a complex field instance
+	// tempCustomFields groups sub-fields for complex custom fields, keyed by "custom_<label>"
+	tempCustomFields := make(map[string]map[string]interface{})
+	customFieldOrder := make(map[string][]string)
 	warnings := make([]string, 0)
 
 	// Define simple fields that should strictly have only one value
@@ -1147,6 +1150,42 @@ func processFieldsForSDK(inputFields []types.SecretField) ([]types.SecretField, 
 	}
 
 	for _, field := range inputFields {
+		// ── Custom field routing ─────────────────────────────────────────────────
+		// Fields typed as "custom.<Label>" or "custom.<Label>.<element>" are
+		// user-defined custom fields that belong in recordData.Custom, not Fields.
+		if strings.HasPrefix(field.Type, "custom.") {
+			rest := strings.TrimPrefix(field.Type, "custom.")
+			// rest is either "Label" (simple) or "Label.element" (complex custom)
+			customParts := strings.SplitN(rest, ".", 2)
+			label := customParts[0]
+
+			if len(customParts) == 1 {
+				// Simple custom field: "custom.Label" → type=text, label=Label
+				processedFields = append(processedFields, types.SecretField{
+					Type:     "text",
+					Label:    label,
+					Value:    field.Value,
+					IsCustom: true,
+				})
+			} else {
+				// Complex custom field: "custom.Label.element" — group by label
+				element := customParts[1]
+				instanceKey := "custom_" + label
+				if _, ok := tempCustomFields[instanceKey]; !ok {
+					tempCustomFields[instanceKey] = make(map[string]interface{})
+					customFieldOrder[instanceKey] = make([]string, 0)
+				}
+				if len(field.Value) > 0 {
+					tempCustomFields[instanceKey][element] = field.Value[0]
+				} else {
+					tempCustomFields[instanceKey][element] = ""
+				}
+				customFieldOrder[instanceKey] = append(customFieldOrder[instanceKey], element)
+			}
+			continue
+		}
+		// ────────────────────────────────────────────────────────────────────────
+
 		parts := strings.SplitN(field.Type, ".", 2)
 		baseType := parts[0]
 		subField := ""
@@ -1447,5 +1486,48 @@ func processFieldsForSDK(inputFields []types.SecretField) ([]types.SecretField, 
 			Value: []interface{}{complexValue},
 		})
 	}
+
+	// Reconstruct complex custom fields (e.g. "custom.Work Phone.number" grouped above)
+	for instanceKey := range tempCustomFields {
+		label := strings.TrimPrefix(instanceKey, "custom_")
+		subFieldsMap := tempCustomFields[instanceKey]
+
+		// Infer the underlying complex type by matching elements against known definitions
+		inferredType := inferComplexCustomFieldType(subFieldsMap, complexFieldDefinitions)
+
+		// Build the value map from the collected sub-fields
+		valueMap := make(map[string]interface{})
+		for _, element := range customFieldOrder[instanceKey] {
+			valueMap[element] = subFieldsMap[element]
+		}
+
+		processedFields = append(processedFields, types.SecretField{
+			Type:     inferredType,
+			Label:    label,
+			Value:    []interface{}{valueMap},
+			IsCustom: true,
+		})
+	}
+
 	return processedFields, warnings, nil
+}
+
+// inferComplexCustomFieldType returns the best-matching complex field type for the given
+// sub-field map by scoring against known complex field definitions.
+func inferComplexCustomFieldType(subFields map[string]interface{}, complexDefs map[string]map[string]string) string {
+	bestType := "text"
+	bestScore := 0
+	for complexType, elements := range complexDefs {
+		score := 0
+		for subField := range subFields {
+			if _, ok := elements[subField]; ok {
+				score++
+			}
+		}
+		if score > bestScore {
+			bestScore = score
+			bestType = complexType
+		}
+	}
+	return bestType
 }

@@ -150,7 +150,7 @@ func (s *Server) getAvailableTools() []types.MCPTool {
 		// Phase 2 Tools
 		{
 			Name:        "create_secret",
-			Description: "Create a new KSM secret. Fields are specified in a flattened format. Examples: 'login', 'password', 'bankAccount.accountType', 'phone.type', 'name.first', 'passkey.credentialId', 'passkey.privateKey' (as JSON string of JWK). For enum-like fields (e.g., phone.type), use TitleCase values (e.g., 'Mobile'). Requires confirmation.",
+			Description: "Create a new KSM secret. Fields are specified in a flattened format. Standard fields examples: 'login', 'password', 'bankAccount.accountType', 'phone.type', 'name.first', 'passkey.credentialId', 'passkey.privateKey' (as JSON string of JWK). For enum-like fields (e.g., phone.type), use TitleCase values (e.g., 'Mobile'). Custom (user-defined) fields — also called 'additional fields', 'extra fields', or fields the user wants to fill in themselves — use 'custom.<label>' notation, e.g., 'custom.Employee ID', 'custom.Notes', 'custom.Department'. Use empty value [\"\"] when the user will fill the field later. Requires confirmation.",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
@@ -168,17 +168,17 @@ func (s *Server) getAvailableTools() []types.MCPTool {
 					},
 					"fields": map[string]interface{}{
 						"type":        "array",
-						"description": "Array of field objects. Use flattened dot notation for complex fields (e.g., bankAccount.routingNumber). Each field value must be an array with a single string element, e.g., {type: \"login\", value: [\"user\"]}, {type: \"bankAccount.accountType\", value: [\"Checking\"]}.",
+						"description": "Array of field objects. Standard fields use flattened dot notation, e.g., {type: \"login\", value: [\"user\"]}, {type: \"bankAccount.accountType\", value: [\"Checking\"]}. Custom (user-defined) fields use 'custom.<label>' as the type — the label is whatever name the user wants, e.g., {type: \"custom.Employee ID\", value: [\"\"]}, {type: \"custom.Notes\", value: [\"\"]}, {type: \"custom.Department\", value: [\"Engineering\"]}. Empty values [\"\"] are valid when the user will fill the field in later.",
 						"items": map[string]interface{}{
 							"type": "object",
 							"properties": map[string]interface{}{
 								"type": map[string]interface{}{
 									"type":        "string",
-									"description": "Field type, using dot notation for sub-fields (e.g., login, bankAccount.accountType, address.street1).",
+									"description": "Field type. Standard fields use dot notation for sub-fields (e.g., login, bankAccount.accountType, address.street1). Custom (user-defined) fields use 'custom.<label>' where label is the field name the user wants (e.g., custom.Notes, custom.Employee ID, custom.Department, custom.Reference Number).",
 								},
 								"value": map[string]interface{}{
 									"type":        "array",
-									"description": "Field value, as a single-element array (e.g., [\"the_value\"] ). For enum-like sub-fields (e.g. phone.type), use TitleCase values (e.g. [\"Mobile\"]). For passkey.privateKey, value should be a JSON string representing the JsonWebKey. Example complex fields: bankAccount:[{accountType,routingNumber,accountNumber}], name:[{first,middle,last}], passkey:[{privateKey (JSON string),credentialId,signCount,userId,relyingParty,username,createdDate}], appFiller:[{applicationTitle,contentFilter,macroSequence}], script:[{command,fileRef,recordRef (comma-sep UIDs)}], pamResources:[{controllerUid,folderUid,resourceRef (comma-sep UIDs)}]",
+									"description": "Field value, as a single-element array (e.g., [\"the_value\"]). Use [\"\"] for empty fields the user will fill in later. For enum-like sub-fields (e.g. phone.type), use TitleCase values (e.g. [\"Mobile\"]). For passkey.privateKey, value should be a JSON string representing the JsonWebKey. Example complex fields: bankAccount:[{accountType,routingNumber,accountNumber}], name:[{first,middle,last}], passkey:[{privateKey (JSON string),credentialId,signCount,userId,relyingParty,username,createdDate}], appFiller:[{applicationTitle,contentFilter,macroSequence}], script:[{command,fileRef,recordRef (comma-sep UIDs)}], pamResources:[{controllerUid,folderUid,resourceRef (comma-sep UIDs)}]",
 									"items":       map[string]interface{}{"type": "string"},
 									"minItems":    1,
 									"maxItems":    1,
@@ -197,7 +197,7 @@ func (s *Server) getAvailableTools() []types.MCPTool {
 		},
 		{
 			Name:        "update_secret",
-			Description: "Update an existing KSM secret. Fields are specified in a flattened format. Examples: 'login', 'password', 'bankAccount.accountType', 'phone.type', 'name.first', 'passkey.credentialId', 'passkey.privateKey' (as JSON string of JWK). For enum-like fields (e.g., phone.type), use TitleCase values (e.g., 'Mobile'). Requires confirmation.",
+			Description: "Update an existing KSM secret. Fields are specified in a flattened format. Standard fields examples: 'login', 'password', 'bankAccount.accountType', 'phone.type', 'name.first', 'passkey.credentialId', 'passkey.privateKey' (as JSON string of JWK). For enum-like fields (e.g., phone.type), use TitleCase values (e.g., 'Mobile'). Custom (user-defined) fields use 'custom.<label>' notation, e.g., {type:\"custom.Notes\",value:[\"new value\"]}, {type:\"custom.Employee ID\",value:[\"E-1234\"]}. Requires confirmation.",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
@@ -211,17 +211,17 @@ func (s *Server) getAvailableTools() []types.MCPTool {
 					},
 					"fields": map[string]interface{}{
 						"type":        "array",
-						"description": "Array of field objects to update or add. Use flattened dot notation for complex fields (e.g., bankAccount.routingNumber). Each field value must be an array with a single string element, e.g., {type: \"login\", value: [\"user\"]}, {type: \"bankAccount.accountType\", value: [\"Checking\"]}. If a field type is provided that already exists, its value will be replaced. If it doesn't exist, it will be added.",
+						"description": "Array of field objects to update or add. Standard fields use flattened dot notation, e.g., {type: \"login\", value: [\"user\"]}, {type: \"bankAccount.accountType\", value: [\"Checking\"]}. Custom (user-defined) fields use 'custom.<label>' as the type, e.g., {type: \"custom.Notes\", value: [\"new value\"]}, {type: \"custom.Employee ID\", value: [\"E-1234\"]}. If a field already exists it is replaced; if it doesn't exist it is added.",
 						"items": map[string]interface{}{
 							"type": "object",
 							"properties": map[string]interface{}{
 								"type": map[string]interface{}{
 									"type":        "string",
-									"description": "Field type, using dot notation for sub-fields (e.g., login, bankAccount.accountType, address.street1).",
+									"description": "Field type. Standard fields use dot notation for sub-fields (e.g., login, bankAccount.accountType, address.street1). Custom (user-defined) fields use 'custom.<label>' where label is the field name (e.g., custom.Notes, custom.Employee ID).",
 								},
 								"value": map[string]interface{}{
 									"type":        "array",
-									"description": "Field value, as a single-element array (e.g., [\"the_value\"] ). For enum-like sub-fields (e.g. phone.type), use TitleCase values (e.g. [\"Mobile\"]). For passkey.privateKey, value should be a JSON string representing the JsonWebKey. Example complex fields: bankAccount:[{accountType,routingNumber,accountNumber}], name:[{first,middle,last}], passkey:[{privateKey (JSON string),credentialId,signCount,userId,relyingParty,username,createdDate}], appFiller:[{applicationTitle,contentFilter,macroSequence}], script:[{command,fileRef,recordRef (comma-sep UIDs)}], pamResources:[{controllerUid,folderUid,resourceRef (comma-sep UIDs)}]",
+									"description": "Field value, as a single-element array (e.g., [\"the_value\"]). For enum-like sub-fields (e.g. phone.type), use TitleCase values (e.g. [\"Mobile\"]). For passkey.privateKey, value should be a JSON string representing the JsonWebKey. Example complex fields: bankAccount:[{accountType,routingNumber,accountNumber}], name:[{first,middle,last}], passkey:[{privateKey (JSON string),credentialId,signCount,userId,relyingParty,username,createdDate}], appFiller:[{applicationTitle,contentFilter,macroSequence}], script:[{command,fileRef,recordRef (comma-sep UIDs)}], pamResources:[{controllerUid,folderUid,resourceRef (comma-sep UIDs)}]",
 									"items":       map[string]interface{}{"type": "string"},
 									"minItems":    1,
 									"maxItems":    1,

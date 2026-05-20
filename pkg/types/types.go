@@ -68,8 +68,10 @@ type TOTPResponse struct {
 
 // SecretField represents a field in a secret
 type SecretField struct {
-	Type  string        `json:"type"`
-	Value []interface{} `json:"value"`
+	Type     string        `json:"type"`
+	Label    string        `json:"label,omitempty"`    // For custom fields: the user-visible label
+	Value    []interface{} `json:"value"`
+	IsCustom bool          `json:"is_custom,omitempty"` // True when field belongs in the record's custom[] section
 }
 
 // CreateSecretParams parameters for creating a secret
