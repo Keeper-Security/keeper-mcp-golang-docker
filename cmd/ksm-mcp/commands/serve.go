@@ -17,6 +17,7 @@ import (
 	"github.com/keeper-security/ksm-mcp/internal/recordtemplates"
 	"github.com/keeper-security/ksm-mcp/internal/storage"
 	"github.com/keeper-security/ksm-mcp/pkg/types"
+	klog "github.com/keeper-security/secrets-manager-go/core/logger"
 	"github.com/spf13/cobra"
 )
 
@@ -76,6 +77,15 @@ func init() {
 }
 
 func runServe(cmd *cobra.Command, args []string) error {
+	// The KSM Go SDK's logger (klog) defaults to writing WARNING-level
+	// diagnostics to os.Stdout. In stdio MCP transport, stdout is reserved
+	// exclusively for the JSON-RPC stream, so any SDK warning (e.g. an
+	// incompatible General-type record or folder key in the Application scope)
+	// corrupts the first message and the client fails with a JSON parse error
+	// like "Unexpected non-whitespace character after JSON at position 4".
+	// Redirect all SDK logging to stderr so stdout carries JSON-RPC only.
+	klog.SetOutput(os.Stderr)
+
 	// Load record templates from embedded files
 	if err := recordtemplates.LoadRecordTemplates(); err != nil {
 		// Make template loading errors fatal during development and for stability
