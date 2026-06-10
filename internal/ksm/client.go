@@ -1503,6 +1503,37 @@ func (c *Client) CreateSecret(params types.CreateSecretParams) (string, error) {
 	return uid, nil
 }
 
+// complexFieldBaseTypes are structured Keeper field types whose value is an object
+// with sub-fields (not a single scalar). record.SetFieldValueSingle cannot set these
+// from a string, so UpdateSecret must not attempt to: doing so silently no-ops while
+// Save() still succeeds, producing a misleading "success" with no data change.
+var complexFieldBaseTypes = map[string]bool{
+	"name":             true,
+	"phone":            true,
+	"address":          true,
+	"host":             true,
+	"securityQuestion": true,
+	"paymentCard":      true,
+	"bankAccount":      true,
+	"keyPair":          true,
+	"pamHostname":      true,
+	"passkey":          true,
+	"appFiller":        true,
+	"pamResources":     true,
+	"script":           true,
+}
+
+// isUnsupportedComplexFieldUpdate reports whether a (non-custom, non-password) field
+// type cannot be applied by SetFieldValueSingle. It covers both bare complex types
+// (e.g. "host", "keyPair") and flattened sub-field paths (e.g. "host.port",
+// "keyPair.privateKey").
+func isUnsupportedComplexFieldUpdate(fieldType string) bool {
+	if strings.Contains(fieldType, ".") {
+		return true // flattened sub-field path (e.g. host.port) — structured
+	}
+	return complexFieldBaseTypes[fieldType]
+}
+
 // UpdateSecret updates an existing secret
 func (c *Client) UpdateSecret(params types.UpdateSecretParams) error {
 	// Validate UID
@@ -1520,6 +1551,19 @@ func (c *Client) UpdateSecret(params types.UpdateSecretParams) error {
 	}
 
 	record := records[0]
+
+	// Guard against the silent-no-op bug: SetFieldValueSingle (used below) can only set
+	// scalar fields. A structured/complex field would be dropped while Save() still
+	// reports success — a false "success" that risks silent data loss. Reject such
+	// updates up-front (before mutating the record) with an actionable error instead.
+	for _, field := range params.Fields {
+		if field.IsCustom || field.Type == "password" {
+			continue
+		}
+		if isUnsupportedComplexFieldUpdate(field.Type) {
+			return fmt.Errorf("update_secret cannot modify the structured field %q: it would be silently dropped while still reporting success. Edit this field in the Keeper Vault, or delete and recreate the record (affected types: host, keyPair, name, address, phone, paymentCard, bankAccount, securityQuestion, pamHostname, passkey, appFiller, pamResources, script, and any \"base.subfield\" path)", field.Type)
+		}
+	}
 
 	// Update fields
 	if params.Title != "" {
