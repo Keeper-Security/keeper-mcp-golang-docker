@@ -84,10 +84,10 @@ func (s *Server) handleGetPrompt(request types.MCPRequest) (map[string]interface
 	// detailsJSON, _ := params.Arguments["details_json"].(string) // Not used for now
 
 	var responseTextBuilder strings.Builder
-	responseTextBuilder.WriteString(fmt.Sprintf("**KSM Action Confirmation Required**\n\nACTION: %s.", actionDesc))
+	fmt.Fprintf(&responseTextBuilder, "**KSM Action Confirmation Required**\n\nACTION: %s.", actionDesc)
 
 	if warningMsg != "" {
-		responseTextBuilder.WriteString(fmt.Sprintf("\n\n**WARNING:** %s", warningMsg))
+		fmt.Fprintf(&responseTextBuilder, "\n\n**WARNING:** %s", warningMsg)
 	}
 
 	responseTextBuilder.WriteString("\n\nPlease explicitly state if you 'approve' or 'deny' this action.")
