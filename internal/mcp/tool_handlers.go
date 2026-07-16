@@ -689,7 +689,7 @@ func (s *Server) executeGetRecordTypeSchema(client KSMClient, args json.RawMessa
 	if err != nil {
 		// Log the error more visibly as well, as this indicates a problem with template loading or lookup
 		s.logError("mcp", fmt.Errorf("get_record_type_schema: error from recordtemplates.GetSchema for type '%s': %w", params.RecordType, err), nil)
-		return nil, fmt.Errorf("failed to get schema for record type '%s': %w. Ensure templates are loaded correctly and the type exists.", params.RecordType, err)
+		return nil, fmt.Errorf("failed to get schema for record type '%s': %w (ensure templates are loaded correctly and the type exists)", params.RecordType, err)
 	}
 
 	return schema, nil
@@ -721,7 +721,7 @@ func (s *Server) executeCreateSecretConfirmed(client KSMClient, args json.RawMes
 			originalErrMessage := err.Error()
 			// ... [The existing logic for suggesting parent folder can be kept or simplified] ...
 			// For now, let's return a more direct error if this happens post-confirmation with a folder_uid.
-			return nil, fmt.Errorf("failed to create secret '%s' in folder '%s' (KSM API error: %s). Ensure the folder is a shared folder and accessible.", params.Title, params.FolderUID, originalErrMessage)
+			return nil, fmt.Errorf("failed to create secret '%s' in folder '%s' (KSM API error: %s; ensure the folder is a shared folder and accessible)", params.Title, params.FolderUID, originalErrMessage)
 		}
 		// Generic KSM error
 		return nil, fmt.Errorf("failed to create secret '%s': %w", params.Title, err)
